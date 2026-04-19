@@ -326,8 +326,8 @@ class MiHomeService:
                 or "qr" in query_keys
                 or "ticket" in query_keys
             )
-        except Exception:
-            logger.debug("[miastrbot] 二维码链接校验失败")
+        except Exception as e:
+            logger.debug(f"[miastrbot] 二维码链接校验失败: {type(e).__name__}")
             return False
     
     async def _refresh_devices_cache(self):
