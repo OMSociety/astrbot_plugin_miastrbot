@@ -1,130 +1,159 @@
 {
     "xiaomi": {
-        "account": {
-            "description": "小米账号",
-            "type": "string",
-            "default": "",
-            "hint": "邮箱或手机号，用于登录小爱音箱"
-        },
-        "password": {
-            "description": "密码",
-            "type": "string",
-            "default": "",
-            "obvious_hint": true
-        },
-        "device_id": {
-            "description": "设备 DID",
-            "type": "string",
-            "default": "",
-            "hint": "留空自动选择绑定列表第一个设备，可通过 micli list 查看"
-        },
-        "hardware": {
-            "description": "音箱型号",
-            "type": "string",
-            "default": "L05C",
-            "hint": "L05C(Play增强版) / LX06(Pro) / LX04 / X10A / L05B"
+        "description": "小爱音箱配置",
+        "type": "object",
+        "items": {
+            "account": {
+                "description": "小米账号",
+                "type": "string",
+                "default": "",
+                "hint": "邮箱或手机号，用于登录小爱音箱"
+            },
+            "password": {
+                "description": "密码",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true
+            },
+            "device_id": {
+                "description": "设备 DID",
+                "type": "string",
+                "default": "",
+                "hint": "留空自动选择绑定列表第一个设备"
+            },
+            "hardware": {
+                "description": "音箱型号",
+                "type": "string",
+                "default": "L05C",
+                "hint": "L05C(Play增强版) / LX06(Pro) / LX04 / X10A / L05B"
+            }
         }
     },
+
     "mihome": {
-        "oauth_token": {
-            "description": "OAuth Token（优先）",
-            "type": "string",
-            "default": "",
-            "hint": "扫码登录后自动生成，无需手动填写"
-        },
-        "account": {
-            "description": "米家账号",
-            "type": "string",
-            "default": ""
-        },
-        "password": {
-            "description": "米家密码",
-            "type": "string",
-            "default": "",
-            "obvious_hint": true
+        "description": "米家设备配置",
+        "type": "object",
+        "items": {
+            "oauth_token": {
+                "description": "OAuth Token（优先）",
+                "type": "string",
+                "default": "",
+                "hint": "扫码登录后自动生成，无需手动填写"
+            },
+            "account": {
+                "description": "米家账号",
+                "type": "string",
+                "default": ""
+            },
+            "password": {
+                "description": "米家密码",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true
+            }
         }
     },
+
     "speaker": {
-        "ai_mode": {
-            "description": "AI 对话模式",
-            "type": "bool",
-            "default": false,
-            "hint": "开启后私聊消息直接进 AI 意图识别；关闭则仅响应命令前缀"
-        },
-        "model": {
-            "description": "LLM 模型",
-            "type": "string",
-            "default": "gpt-4o-mini",
-            "hint": "用于意图识别和闲聊，建议用低价模型"
-        },
-        "command_prefix": {
-            "description": "命令前缀",
-            "type": "string",
-            "default": "/小爱,",
-            "hint": "逗号分隔，带此前缀才当作命令处理"
+        "description": "对话模式配置",
+        "type": "object",
+        "items": {
+            "ai_mode": {
+                "description": "AI 对话模式",
+                "type": "bool",
+                "default": false,
+                "hint": "开启后私聊消息直接进 AI 意图识别；关闭则仅响应命令前缀"
+            },
+            "model": {
+                "description": "LLM 模型",
+                "type": "string",
+                "default": "gpt-4o-mini",
+                "hint": "用于意图识别和闲聊，建议用低价模型"
+            },
+            "command_prefix": {
+                "description": "命令前缀",
+                "type": "string",
+                "default": "/小爱,",
+                "hint": "逗号分隔，带此前缀才当作命令处理"
+            }
         }
     },
+
     "weather": {
-        "weather_api_key": {
-            "description": "心知天气 API Key",
-            "type": "string",
-            "default": "",
-            "hint": "从 https://www.seniverse.com 免费申请"
-        },
-        "weather_city": {
-            "description": "默认城市",
-            "type": "string",
-            "default": "北京"
+        "description": "天气查询配置",
+        "type": "object",
+        "items": {
+            "weather_api_key": {
+                "description": "心知天气 API Key",
+                "type": "string",
+                "default": "",
+                "hint": "从 https://www.seniverse.com 免费申请"
+            },
+            "weather_city": {
+                "description": "默认城市",
+                "type": "string",
+                "default": "北京"
+            }
         }
     },
+
     "tts": {
-        "type": {
-            "description": "TTS 引擎",
-            "type": "string",
-            "default": "edge",
-            "hint": "edge（免费，推荐）/ openai / azure / native"
-        },
-        "voice": {
-            "description": "语音角色",
-            "type": "string",
-            "default": "zh-CN-XiaoxiaoNeural",
-            "hint": "推荐：zh-CN-XiaoxiaoNeural（晓晓）"
-        },
-        "rate": {
-            "description": "语速",
-            "type": "string",
-            "default": "+0%",
-            "hint": "+10% 加速，-10% 减速"
+        "description": "TTS 播报配置",
+        "type": "object",
+        "items": {
+            "engine": {
+                "description": "TTS 引擎",
+                "type": "string",
+                "default": "edge",
+                "hint": "edge（免费，推荐）/ openai / azure / native"
+            },
+            "voice": {
+                "description": "语音角色",
+                "type": "string",
+                "default": "zh-CN-XiaoxiaoNeural",
+                "hint": "推荐：zh-CN-XiaoxiaoNeural（晓晓）"
+            },
+            "rate": {
+                "description": "语速",
+                "type": "string",
+                "default": "+0%",
+                "hint": "+10% 加速，-10% 减速"
+            }
         }
     },
+
     "webui": {
-        "enable": {
-            "description": "启用面板",
-            "type": "bool",
-            "default": true,
-            "hint": "关闭后可节省资源，命令操作不受影响"
-        },
-        "host": {
-            "description": "监听地址",
-            "type": "string",
-            "default": "0.0.0.0"
-        },
-        "port": {
-            "description": "端口",
-            "type": "int",
-            "default": 9528
-        },
-        "password": {
-            "description": "访问密码",
-            "type": "string",
-            "default": "",
-            "hint": "留空则无密码保护"
-        },
-        "auto_kill": {
-            "description": "端口冲突时自动清理",
-            "type": "bool",
-            "default": false,
-            "hint": "开启后启动时自动 kill 占用端口的旧进程"
+        "description": "WebUI 管理面板",
+        "type": "object",
+        "items": {
+            "enable": {
+                "description": "启用面板",
+                "type": "bool",
+                "default": true,
+                "hint": "关闭后可节省资源，命令操作不受影响"
+            },
+            "host": {
+                "description": "监听地址",
+                "type": "string",
+                "default": "0.0.0.0"
+            },
+            "port": {
+                "description": "端口",
+                "type": "int",
+                "default": 9528
+            },
+            "password": {
+                "description": "访问密码",
+                "type": "string",
+                "default": "",
+                "hint": "留空则无密码保护"
+            },
+            "auto_kill": {
+                "description": "端口冲突时自动清理",
+                "type": "bool",
+                "default": false,
+                "hint": "开启后启动时自动 kill 占用端口的旧进程"
+            }
         }
     }
 }
