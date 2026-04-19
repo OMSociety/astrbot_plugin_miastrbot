@@ -84,16 +84,16 @@ class MiASTRBotPlugin(Star):
             self.log.error(traceback.format_exc())
         
         # 检查是否启用 WebUI
-        enable_webui = self.config_manager.get("enable_webui", True)
+        enable_webui = self.config_manager.get("webui.enable", True)
         if not enable_webui:
             self.log.info("WebUI 已禁用")
             return
         
         # 初始化 WebUI 配置（必须在 init_container 之前定义）
         webui_config = WebUIConfig(
-            host=self.config_manager.get("webui_host", "0.0.0.0"),
-            port=self.config_manager.get("webui_port", 9528),
-            password=self.config_manager.get("webui_password", "")
+            host=self.config_manager.get("webui.host", "0.0.0.0"),
+            port=self.config_manager.get("webui.port", 9528),
+            password=self.config_manager.get("webui.password", "")
         )
         
         # 初始化容器（必须在 webui_config 定义之后）
@@ -106,7 +106,7 @@ class MiASTRBotPlugin(Star):
         )
         
         try:
-            auto_kill = self.config_manager.get("webui_auto_kill", False)
+            auto_kill = self.config_manager.get("webui.auto_kill", False)
             self._webui_server = Server(
                 host=webui_config.host,
                 port=webui_config.port,
