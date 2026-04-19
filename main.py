@@ -175,7 +175,6 @@ class MiASTRBotPlugin(Star):
         except Exception as e:
             self.log.error(f"Agent Handler 初始化失败: {e}")
         
-        # 更新 WebUI 服务引用
         init_container(
             config_manager=self.config_manager,
             xiaomi_service=self.xiaomi_service,
