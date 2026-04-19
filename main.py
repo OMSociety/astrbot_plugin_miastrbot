@@ -5,7 +5,7 @@ miastrbot - AstrBot 小爱音箱+米家设备集成插件
 小爱音箱作为语音入口， AstrBot 作为大脑，米家设备作为执行终端
 
 作者: Slandre & Flandre
-版本: 0.0.1
+版本: 0.0.9
 """
 
 import os
@@ -35,7 +35,7 @@ from .utils.exceptions import (
 PLUGIN_NAME = "astrbot_plugin_miastrbot"
 
 
-@register(PLUGIN_NAME, "Slandre & Flandre & MiniMax", "小爱Astrbot", "0.0.1")
+@register(PLUGIN_NAME, "Slandre & Flandre", "小爱Agent", "0.0.9")
 class MiASTRBotPlugin(Star):
     """miastrbot 插件主类"""
     
