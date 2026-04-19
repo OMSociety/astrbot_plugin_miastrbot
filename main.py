@@ -266,11 +266,11 @@ class MiASTRBotPlugin(Star):
         except XiaomiCommandError as e:
             return f"播报失败: {e}"
     
-    @filter.event_message_type(filter.EventMessageType.FRIEND_MESSAGE)
+    @filter.event_message_type(filter.EventMessageType.PRIVATE_MESSAGE)
     async def on_message(self, event: AstrMessageEvent):
         """
         处理接收到的消息
-        仅处理私聊消息（不监听QQ群聊）
+        仅处理私聊消息（不监听 QQ 群聊）
         """
         if not event.message_str:
             return
