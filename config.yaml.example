@@ -1,33 +1,40 @@
-# miastrbot 配置文件
+# miastrbot 配置文件示例
 # 复制此文件为 config.yaml 并填写配置
 
-# 小爱音箱配置
+# ========== 小爱音箱 ==========
 xiaomi:
-  account: ""              # 小米账号
-  password: ""             # 密码
-  device_id: ""            # 小爱音箱 DID（通过 micli list 获取）
-  hardware: "L05C"         # 硬件型号：L05C/LX06/LX04/X10A/L05B
+  account: ""                 # 小米账号（邮箱或手机号）
+  password: ""               # 密码
+  device_id: ""              # 留空则自动选择第一个设备
+  hardware: "L05C"            # L05C/LX06/LX04/X10A/L05B
 
-# 米家设备配置
+# ========== 米家设备 ==========
 mihome:
-  oauth_token: ""          # 米家 OAuth Token（优先使用）
-  # 或使用账号密码
-  account: ""
-  password: ""
+  oauth_token: ""            # 优先：扫码登录自动生成，无需填写
+  account: ""                 # 米家账号（与上方小米账号相同）
+  password: ""                # 米家密码
 
-# 音箱对话配置（独立于全局配置）
+# ========== 对话模式 ==========
 speaker:
-  model: "gpt-4o-mini"    # 音箱专用模型
-  stream: true             # 是否启用流式响应
+  ai_mode: false             # false：仅命令前缀响应 | true：私聊消息全进AI
+  model: "gpt-4o-mini"       # LLM 模型
+  command_prefix: "/小爱,"     # 命令前缀，逗号分隔
 
-# TTS配置
+# ========== 天气查询 ==========
+weather:
+  weather_api_key: ""        # 心知天气 API Key（免费申请）
+  weather_city: "北京"         # 默认查询城市
+
+# ========== TTS 播报 ==========
 tts:
-  enabled: true
-  type: "edge"             # edge / openai / azure / native
+  type: "edge"               # edge（免费，推荐）/ openai / azure / native
   voice: "zh-CN-XiaoxiaoNeural"
+  rate: "+0%"                # +10% 加速，-10% 减速
 
-# WebUI配置
+# ========== WebUI 管理面板 ==========
 webui:
+  enable: true               # 关闭后可节省资源
+  host: "0.0.0.0"
   port: 9528
-  username: "admin"
-  password: "password"
+  password: ""               # 留空无密码保护
+  auto_kill: false           # 端口冲突时自动清理旧进程
