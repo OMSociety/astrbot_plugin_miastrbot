@@ -10,7 +10,6 @@ miastrbot - AstrBot 小爱音箱+米家设备集成插件
 
 import os
 import asyncio
-import threading
 from typing import Optional
 
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
@@ -66,7 +65,6 @@ class MiASTRBotPlugin(Star):
         self._webui_server = None
         self._running = False
         self._init_lock = None
-        self._init_lock_guard = threading.Lock()
         
         self.log.info("插件初始化完成")
     
@@ -77,6 +75,8 @@ class MiASTRBotPlugin(Star):
 
     async def initialize(self):
         await super().initialize()
+        if self._init_lock is None:
+            self._init_lock = asyncio.Lock()
         
         # 先初始化服务（包括 mihome_service），再启动 WebUI
         try:
@@ -292,9 +292,7 @@ class MiASTRBotPlugin(Star):
         # 延迟初始化服务（带锁防止重复初始化）
         if not self._running:
             if self._init_lock is None:
-                with self._init_lock_guard:
-                    if self._init_lock is None:
-                        self._init_lock = asyncio.Lock()
+                self._init_lock = asyncio.Lock()
             async with self._init_lock:
                 if not self._running:  # 双重检查锁定模式
                     self._running = True
