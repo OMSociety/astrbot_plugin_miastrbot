@@ -295,6 +295,9 @@ class MiASTRBotPlugin(Star):
         for prefix in command_prefixes:
             if message_text.startswith(prefix.strip()):
                 command = message_text[len(prefix):].strip()
+                # 忽略空命令（只有前缀无内容）
+                if not command:
+                    return
                 await self._handle_command(event, command)
                 return
         
