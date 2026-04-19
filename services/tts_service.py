@@ -349,9 +349,9 @@ class VolcengineTTSProvider(BaseTTSProvider):
         self.appid = config.get("volcengine_appid", "") or os.getenv("VOLCENGINE_APPID", "")
         self.access_token = config.get("volcengine_access_token", "") or os.getenv("VOLCENGINE_ACCESS_TOKEN", "")
         self.voice_type = config.get("volcengine_voice_type", "") or os.getenv("VOLCENGINE_VOICE_TYPE", "")
-        self.sample_rate = self._safe_int(config.get("volcengine_sample_rate"), 24000)
-        self.speed_ratio = self._safe_int(config.get("volcengine_speed_ratio"), 0)
-        self.loudness_rate = self._safe_int(config.get("volcengine_loudness_rate"), 0)
+        self.sample_rate = max(8000, self._safe_int(config.get("volcengine_sample_rate"), 24000))
+        self.speed_ratio = self._clamp(self._safe_int(config.get("volcengine_speed_ratio"), 0), -50, 100)
+        self.loudness_rate = self._clamp(self._safe_int(config.get("volcengine_loudness_rate"), 0), -50, 100)
         self.resource_id = config.get("volcengine_resource_id", "seed-icl-2.0")
 
     @staticmethod
@@ -362,6 +362,10 @@ class VolcengineTTSProvider(BaseTTSProvider):
             return int(value)
         except (TypeError, ValueError):
             return default
+
+    @staticmethod
+    def _clamp(value: int, min_value: int, max_value: int) -> int:
+        return max(min_value, min(max_value, value))
 
     async def speak(self, text: str) -> bytes:
         if not self.appid or not self.access_token or not self.voice_type:
@@ -407,26 +411,39 @@ class VolcengineTTSProvider(BaseTTSProvider):
                         detail = await response.text()
                         raise TTSServerError(f"火山云 TTS 请求失败: HTTP {response.status} - {detail[:300]}")
 
-                    async for line in response.content:
-                        if not line:
+                    buffer = ""
+                    stream_done = False
+                    async for chunk in response.content.iter_any():
+                        if not chunk:
                             continue
-                        line_str = line.decode("utf-8", errors="ignore").strip()
-                        if not line_str.startswith("data:"):
-                            continue
-                        data_str = line_str[len("data:"):].strip()
-                        if not data_str:
-                            continue
-                        try:
-                            data = json.loads(data_str)
-                        except json.JSONDecodeError:
-                            continue
+                        buffer += chunk.decode("utf-8", errors="ignore")
+                        lines = buffer.splitlines(keepends=True)
+                        if lines and not lines[-1].endswith(("\n", "\r")):
+                            buffer = lines.pop()
+                        else:
+                            buffer = ""
 
-                        if data.get("code") == 0 and data.get("data"):
-                            try:
-                                audio_data.extend(base64.b64decode(data["data"]))
-                            except Exception:
+                        for line in lines:
+                            line_str = line.strip()
+                            if not line_str.startswith("data:"):
                                 continue
-                        elif data.get("code") == 20000000:
+                            data_str = line_str[len("data:"):].strip()
+                            if not data_str:
+                                continue
+                            try:
+                                data = json.loads(data_str)
+                            except json.JSONDecodeError:
+                                continue
+
+                            if data.get("code") == 0 and data.get("data"):
+                                try:
+                                    audio_data.extend(base64.b64decode(data["data"]))
+                                except Exception as decode_error:
+                                    logger.debug(f"[miastrbot] 火山云 TTS 数据块解码失败: {decode_error}")
+                            elif data.get("code") == 20000000:
+                                stream_done = True
+                                break
+                        if stream_done:
                             break
 
             if not audio_data:
