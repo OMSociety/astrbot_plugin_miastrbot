@@ -64,7 +64,7 @@ class MiASTRBotPlugin(Star):
         # 生命周期任务
         self._webui_server = None
         self._running = False
-        self._init_lock = asyncio.Lock()
+        self._init_lock = None
         
         self.log.info("插件初始化完成")
     
@@ -289,6 +289,8 @@ class MiASTRBotPlugin(Star):
         
         # 延迟初始化服务（带锁防止重复初始化）
         if not self._running:
+            if self._init_lock is None:
+                self._init_lock = asyncio.Lock()
             async with self._init_lock:
                 if not self._running:  # 双重检查锁定模式
                     self._running = True
