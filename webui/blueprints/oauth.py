@@ -155,7 +155,7 @@ async def run_async_login(client_id: str, mihome_service):
             })
         elif result.get("status") == "started":
             await ws_manager.send_json(client_id, {
-                "type": "login_in_progress",
+                "type": "login_started",
                 "message": result.get("message", "登录流程已启动，请扫码")
             })
         elif result.get("status") == "in_progress":
