@@ -357,7 +357,7 @@ class TTSServer:
         """
         self.config = config
         self.enabled = config.get("enabled", True)
-        self.tts_type = config.get("engine", "edge")
+        self.tts_type = config.get("engine") or config.get("type", "edge")
         
         # 创建TTS提供者
         provider_class = self.PROVIDERS.get(self.tts_type)

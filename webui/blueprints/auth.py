@@ -85,6 +85,16 @@ async def logout(session_id: Optional[str] = Cookie(default=None, alias="miastrb
     return response
 
 
+@router.get("/logout")
+async def logout_get(session_id: Optional[str] = Cookie(default=None, alias="miastrbot_session")):
+    """兼容浏览器 GET 登出"""
+    if session_id:
+        remove_session(session_id)
+    response = RedirectResponse(url="/miastrbot/api/login", status_code=302)
+    response.delete_cookie("miastrbot_session", path="/")
+    return response
+
+
 @router.get("/status")
 async def status(session_id: Optional[str] = Cookie(default=None, alias="miastrbot_session")):
     """获取登录状态"""

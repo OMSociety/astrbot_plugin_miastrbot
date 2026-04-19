@@ -153,13 +153,18 @@ async def run_async_login(client_id: str, mihome_service):
                 "type": "login_success",
                 "message": "登录成功"
             })
+        elif result.get("status") == "started":
+            await ws_manager.send_json(client_id, {
+                "type": "login_in_progress",
+                "message": result.get("message", "登录流程已启动，请扫码")
+            })
         elif result.get("status") == "in_progress":
-            # 这种情况不应该发生，因为是异步的
+            await ws_manager.send_json(client_id, {
+                "type": "login_in_progress",
+                "message": "已有登录流程在进行中"
+            })
             if qr_url_holder["url"]:
-                await ws_manager.send_json(client_id, {
-                    "type": "qr_url",
-                    "url": qr_url_holder["url"]
-                })
+                await ws_manager.send_json(client_id, {"type": "qr_url", "url": qr_url_holder["url"]})
         else:
             await ws_manager.send_json(client_id, {
                 "type": "login_error",

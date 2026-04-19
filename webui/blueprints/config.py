@@ -45,7 +45,8 @@ async def update_tts_config(tts_type: str, voice: Optional[str] = None):
         return {"success": False, "message": "配置管理器未初始化"}
     
     try:
-        container.config_manager.set("tts.type", tts_type)
+        container.config_manager.set("tts.engine", tts_type)
+        container.config_manager.set("tts.type", tts_type)  # 兼容旧配置键
         if voice:
             container.config_manager.set("tts.voice", voice)
         

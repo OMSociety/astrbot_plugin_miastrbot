@@ -64,6 +64,7 @@ class MiASTRBotPlugin(Star):
         # 生命周期任务
         self._webui_server = None
         self._running = False
+        self._init_lock = asyncio.Lock()
         
         self.log.info("插件初始化完成")
     
@@ -207,12 +208,23 @@ class MiASTRBotPlugin(Star):
             return False
         
         try:
-            success = await self.mihome_service.login()
+            result = await self.mihome_service.login()
+            if isinstance(result, dict):
+                status = result.get("status")
+                if status in ("success", "started", "in_progress"):
+                    self.log.info(f"米家登录流程状态: {status}")
+                    return True
+                self.log.error(f"米家登录失败: {result.get('message', '未知错误')}")
+                return False
+            success = bool(result)
             if success:
                 self.log.info("米家登录成功")
             return success
         except MiHomeAuthError as e:
             self.log.error(f"米家登录失败: {e}")
+            return False
+        except Exception as e:
+            self.log.error(f"米家登录异常: {e}")
             return False
     
     async def list_mihome_devices(self) -> str:
@@ -277,7 +289,7 @@ class MiASTRBotPlugin(Star):
         
         # 延迟初始化服务（带锁防止重复初始化）
         if not self._running:
-            async with asyncio.Lock():
+            async with self._init_lock:
                 if not self._running:  # 双重检查锁定模式
                     self._running = True
                     try:
@@ -361,7 +373,7 @@ class MiASTRBotPlugin(Star):
     
     async def _send_status(self, event: AstrMessageEvent, _args: str):
         """发送状态信息"""
-        xiaomi_status = "✅ 已连接" if self.xiaomi_service and self.xiaomi_service.is_logged_in() else "❌ 未连接"
+        xiaomi_status = "✅ 已连接" if self.xiaomi_service and self.xiaomi_service.is_logged_in else "❌ 未连接"
         mihome_status = "✅ 已连接" if self.mihome_service and self.mihome_service.is_authenticated() else "❌ 未连接"
         tts_status = "✅ 就绪" if self.tts_server else "❌ 未就绪"
         agent_status = "✅ 就绪" if self.agent_handler else "❌ 未就绪"
