@@ -97,7 +97,14 @@ class MiASTRBotPlugin(Star):
         )
         
         # 初始化容器（必须在 webui_config 定义之后）
-    
+        init_container(
+            config_manager=self.config_manager,
+            xiaomi_service=self.xiaomi_service,
+            mihome_service=self.mihome_service,
+            agent_handler=self.agent_handler,
+            webui_config=webui_config,
+        )
+        
         try:
             auto_kill = self.config_manager.get("webui_auto_kill", False)
             self._webui_server = Server(
@@ -259,11 +266,11 @@ class MiASTRBotPlugin(Star):
         except XiaomiCommandError as e:
             return f"播报失败: {e}"
     
-    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.event_message_type(filter.EventMessageType.FRIEND_MESSAGE)
     async def on_message(self, event: AstrMessageEvent):
         """
         处理接收到的消息
-        支持所有平台的事件消息
+        仅处理私聊消息（不监听QQ群聊）
         """
         if not event.message_str:
             return
