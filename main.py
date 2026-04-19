@@ -373,7 +373,11 @@ class MiASTRBotPlugin(Star):
     
     async def _send_status(self, event: AstrMessageEvent, _args: str):
         """发送状态信息"""
-        xiaomi_status = "✅ 已连接" if self.xiaomi_service and self.xiaomi_service.is_logged_in else "❌ 未连接"
+        xiaomi_logged_in = False
+        if self.xiaomi_service:
+            is_logged_in = getattr(self.xiaomi_service, "is_logged_in", False)
+            xiaomi_logged_in = is_logged_in() if callable(is_logged_in) else bool(is_logged_in)
+        xiaomi_status = "✅ 已连接" if xiaomi_logged_in else "❌ 未连接"
         mihome_status = "✅ 已连接" if self.mihome_service and self.mihome_service.is_authenticated() else "❌ 未连接"
         tts_status = "✅ 就绪" if self.tts_server else "❌ 未就绪"
         agent_status = "✅ 就绪" if self.agent_handler else "❌ 未就绪"
