@@ -35,6 +35,7 @@ class Container:
     mihome_service: Optional[MiHomeService] = None
     agent_handler: Optional[AgentHandler] = None
     webui_config: WebUIConfig = field(default_factory=WebUIConfig)
+    tts_server: Optional[object] = None  # TTS 服务实例
 
 _container: Optional[Container] = None
 
@@ -43,7 +44,8 @@ def init_container(
     xiaomi_service=None,
     mihome_service=None,
     agent_handler=None,
-    webui_config=None
+    webui_config=None,
+    tts_server=None
 ) -> Container:
     """
     初始化容器
@@ -54,7 +56,8 @@ def init_container(
         xiaomi_service=xiaomi_service,
         mihome_service=mihome_service,
         agent_handler=agent_handler,
-        webui_config=webui_config or WebUIConfig()
+        webui_config=webui_config or WebUIConfig(),
+        tts_server=tts_server
     )
     return _container
 
