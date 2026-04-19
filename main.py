@@ -159,11 +159,6 @@ class MiASTRBotPlugin(Star):
             mihome_config = self.config_manager.get_section("mihome")
             self.mihome_service = MiHomeService(config=mihome_config)
             
-            if mihome_config.get("oauth_token") or (
-                mihome_config.get("account") and mihome_config.get("password")
-            ):
-                await self._login_mihome()
-            
             self.log.info("米家服务初始化完成")
         except Exception as e:
             self.log.error(f"米家服务初始化失败: {e}")

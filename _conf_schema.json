@@ -30,30 +30,6 @@
         }
     },
 
-    "mihome": {
-        "description": "米家设备配置",
-        "type": "object",
-        "items": {
-            "oauth_token": {
-                "description": "OAuth Token（优先）",
-                "type": "string",
-                "default": "",
-                "hint": "扫码登录后自动生成，无需手动填写"
-            },
-            "account": {
-                "description": "米家账号",
-                "type": "string",
-                "default": ""
-            },
-            "password": {
-                "description": "米家密码",
-                "type": "string",
-                "default": "",
-                "obvious_hint": true
-            }
-        }
-    },
-
     "speaker": {
         "description": "对话模式配置",
         "type": "object",
