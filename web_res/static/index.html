@@ -168,11 +168,11 @@ async function refreshAll() {
       hideMsg("msgXiaomi");
     }
     renderTable("xiaomiDevices", xiaomi.data.data || [], 3);
-  } catch (err) {
+  } catch (_err) {
     setTag("tagWebui", false, "异常");
     setTag("tagXiaomi", false, "异常");
     setTag("tagMihome", false, "异常");
-    showMsg("msgStatus", `状态刷新失败（网络或服务异常）：${err?.message || "未知错误"}`, "bad");
+    showMsg("msgStatus", "状态刷新失败（网络或服务异常），请稍后重试", "bad");
     renderTable("mihomeDevices", [], 3);
     renderTable("xiaomiDevices", [], 3);
   }
@@ -199,8 +199,7 @@ function wsLogin() {
     try {
       msg = JSON.parse(event.data || "{}");
     } catch (_err) {
-      const preview = String(event.data || "").slice(0, 80);
-      showMsg("msgMihome", `收到无效登录响应（期望 JSON，实际内容片段：${preview}），请重试`, "bad");
+      showMsg("msgMihome", "收到无效登录响应（非 JSON），请重试", "bad");
       return;
     }
     if (msg.type === "qr_url" && msg.url) {
