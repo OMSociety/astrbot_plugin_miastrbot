@@ -301,7 +301,7 @@ class MiHomeService:
         patterns = [
             r'(https://account\.xiaomi\.com/pass/qr/login\?[^\s\'"]+)',
             r'(https://api\.io\.micloud\.xiaomi\.com/qr[^\s\'"]+)',
-            r'(https?://[^\s\'"]*xiaomi\.com[^\s\'"]*qr[^\s\'"]*)',
+            r'(https?://(?:account\.xiaomi\.com|api\.io\.micloud\.xiaomi\.com)/[^\s\'"]*qr[^\s\'"]*)',
             r'二维码[：:]\s*(https://[^\s]+)',
             r'URL[：:]\s*(https://[^\s]+)',
         ]
