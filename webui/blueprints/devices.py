@@ -175,7 +175,9 @@ async def api_xiaomi_login():
     
     try:
         service = container.xiaomi_service
-        if getattr(service, "is_logged_in", False):
+        logged_in_attr = getattr(service, "is_logged_in", False)
+        logged_in = logged_in_attr() if callable(logged_in_attr) else bool(logged_in_attr)
+        if logged_in:
             return {"success": True, "message": "小米账号已登录"}
         
         success = await service.login()

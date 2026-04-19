@@ -199,7 +199,8 @@ function wsLogin() {
     try {
       msg = JSON.parse(event.data || "{}");
     } catch (_err) {
-      showMsg("msgMihome", `收到无效登录响应（期望 JSON，实际：${typeof event.data}），请重试`, "bad");
+      const preview = String(event.data || "").slice(0, 80);
+      showMsg("msgMihome", `收到无效登录响应（期望 JSON，实际内容片段：${preview}），请重试`, "bad");
       return;
     }
     if (msg.type === "qr_url" && msg.url) {
