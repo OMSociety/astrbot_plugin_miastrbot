@@ -1,4 +1,4 @@
-# astrbot_plugin_miastrbot
+# 小爱Astrbot
 
 AstrBot 小爱音箱 + 米家设备集成插件。  
 将小爱音箱作为语音入口，通过 AstrBot 对话能力联动米家设备控制与播报。
