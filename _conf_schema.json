@@ -1,13 +1,5 @@
 {
-    "_version": {
-        "description": "配置版本号",
-        "type": "int",
-        "default": 1
-    },
-
     "xiaomi": {
-        "_group": "小爱音箱",
-        "_group_desc": "小爱音箱语音入口控制",
         "account": {
             "description": "小米账号",
             "type": "string",
@@ -33,10 +25,7 @@
             "hint": "L05C(Play增强版) / LX06(Pro) / LX04 / X10A / L05B"
         }
     },
-
     "mihome": {
-        "_group": "米家设备",
-        "_group_desc": "米家智能设备控制（与音箱独立）",
         "oauth_token": {
             "description": "OAuth Token（优先）",
             "type": "string",
@@ -55,10 +44,7 @@
             "obvious_hint": true
         }
     },
-
     "speaker": {
-        "_group": "对话模式",
-        "_group_desc": "小爱音箱对话行为配置",
         "ai_mode": {
             "description": "AI 对话模式",
             "type": "bool",
@@ -78,10 +64,7 @@
             "hint": "逗号分隔，带此前缀才当作命令处理"
         }
     },
-
     "weather": {
-        "_group": "天气查询",
-        "_group_desc": "与日程助手插件共用同一套配置",
         "weather_api_key": {
             "description": "心知天气 API Key",
             "type": "string",
@@ -94,10 +77,7 @@
             "default": "北京"
         }
     },
-
     "tts": {
-        "_group": "TTS 播报",
-        "_group_desc": "文字转语音配置（播报到音箱）",
         "type": {
             "description": "TTS 引擎",
             "type": "string",
@@ -117,10 +97,7 @@
             "hint": "+10% 加速，-10% 减速"
         }
     },
-
     "webui": {
-        "_group": "WebUI 管理面板",
-        "_group_desc": "浏览器访问设备管理、登录控制",
         "enable": {
             "description": "启用面板",
             "type": "bool",
