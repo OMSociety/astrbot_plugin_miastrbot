@@ -8,7 +8,6 @@
 
 import os
 import asyncio
-import inspect
 from typing import Optional, List, Dict, Any, Callable
 from astrbot.api import logger
 
@@ -117,12 +116,20 @@ class XiaomiService:
                 os.path.join(os.path.expanduser("~"), ".mi.token")
             )
             
-            # 登录获取token（兼容不同 miservice 版本：部分版本要求 sid 参数）
-            login_params = inspect.signature(self._account.login).parameters
-            if "sid" in login_params:
+            # 登录获取 token（兼容不同 miservice 版本）
+            sid_supported = True
+            try:
+                # micoapi 用于 MiNA 设备能力
                 await self._account.login("micoapi")
-            else:
+            except TypeError:
+                sid_supported = False
                 await self._account.login()
+            if sid_supported:
+                # xiaomiio 用于 MiIO 指令能力，失败时不阻断主流程
+                try:
+                    await self._account.login("xiaomiio")
+                except Exception as sid_err:
+                    logger.warning(f"[miastrbot] xiaomiio sid 登录失败，继续使用 micoapi: {sid_err}")
             
             # 初始化服务
             self._ios_service = MiIOService(self._account)
@@ -136,7 +143,34 @@ class XiaomiService:
             
         except Exception as e:
             logger.error(f"[miastrbot] 小爱账号登录失败: {e}")
+            self._logged_in = False
             raise XiaomiAuthError(f"登录失败: {e}")
+
+    async def _relogin_if_possible(self) -> bool:
+        """在凭证可用时尝试重新登录一次"""
+        account = self.config.get("account") or os.getenv("MI_USER", "")
+        password = self.config.get("password") or os.getenv("MI_PASS", "")
+        if not account or not password:
+            return False
+        try:
+            return await self.login(account=account, password=password)
+        except Exception as e:
+            logger.warning(f"[miastrbot] 自动重登失败: {e}")
+            return False
+
+    def _extract_audio_devices(self, device_list_raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """筛选并标准化小爱音箱设备列表"""
+        devices: List[Dict[str, Any]] = []
+        for device in device_list_raw or []:
+            if device.get("extra", {}).get("audio"):
+                devices.append({
+                    "id": device.get("id"),
+                    "did": device.get("did"),
+                    "name": device.get("name"),
+                    "hardware": device.get("hardware"),
+                    "token": device.get("token"),
+                })
+        return devices
     
     async def get_devices(self) -> List[Dict[str, Any]]:
         """
@@ -154,26 +188,25 @@ class XiaomiService:
         try:
             # 使用 MiNAService 获取设备列表 (适配 miservice_fork)
             device_list_raw = await self._na_service.device_list()
-            
-            # 筛选小爱音箱类型
-            devices = []
-            for device in device_list_raw:
-                # 查找有 audio 能力的设备
-                if device.get("extra", {}).get("audio"):
-                    devices.append({
-                        "id": device.get("id"),
-                        "did": device.get("did"),
-                        "name": device.get("name"),
-                        "hardware": device.get("hardware"),
-                        "token": device.get("token"),
-                    })
+            devices = self._extract_audio_devices(device_list_raw)
             
             logger.info(f"[miastrbot] 获取到 {len(devices)} 个小爱音箱设备")
             return devices
             
         except Exception as e:
-            logger.error(f"[miastrbot] 获取设备列表失败: {e}")
-            raise XiaomiAuthError(f"获取设备失败: {e}")
+            logger.warning(f"[miastrbot] 获取设备列表失败，尝试自动重登: {e}")
+            relogin_ok = await self._relogin_if_possible()
+            final_error = e
+            if relogin_ok and self._na_service:
+                try:
+                    device_list_raw = await self._na_service.device_list()
+                    devices = self._extract_audio_devices(device_list_raw)
+                    logger.info(f"[miastrbot] 自动重登后获取到 {len(devices)} 个小爱音箱设备")
+                    return devices
+                except Exception as retry_e:
+                    final_error = retry_e
+            logger.error(f"[miastrbot] 获取设备列表失败: {final_error}")
+            raise XiaomiAuthError(f"获取设备失败: {final_error}")
     
     async def get_device_id(self) -> str:
         """
