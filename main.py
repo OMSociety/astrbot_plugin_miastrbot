@@ -12,7 +12,8 @@ import os
 import asyncio
 from typing import Optional
 
-from astrbot.api.event import filter, AstrMessageEvent, MessageChain, Plain
+from astrbot.api.event import filter, AstrMessageEvent, MessageChain
+from astrbot.core.message.components import Plain
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger as astrbot_logger
 
