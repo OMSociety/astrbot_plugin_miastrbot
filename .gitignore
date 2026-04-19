@@ -1,0 +1,25 @@
+# 配置和敏感文件
+config.yaml
+*.log
+
+# Python缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 其他
+.DS_Store
+Thumbs.db
