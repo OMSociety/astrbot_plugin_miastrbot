@@ -66,6 +66,9 @@ class MiASTRBotConfigManager:
             "MIASTRBOT_WEATHER_CITY": "weather.weather_city",
             "MIASTRBOT_TTS_TYPE": "tts.engine",
             "MIASTRBOT_TTS_VOICE": "tts.voice",
+            "MIASTRBOT_VOLCENGINE_APPID": "tts.volcengine_appid",
+            "MIASTRBOT_VOLCENGINE_ACCESS_TOKEN": "tts.volcengine_access_token",
+            "MIASTRBOT_VOLCENGINE_VOICE_TYPE": "tts.volcengine_voice_type",
             "MIASTRBOT_SPEAKER_MODEL": "speaker.model",
         }
         import os

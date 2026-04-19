@@ -1,5 +1,5 @@
 name: astrbot_plugin_miastrbot
-display_name: 小爱Agent
+display_name: 小爱Astrbot
 desc: AstrBot 小爱音箱+米家设备集成插件，语音入口 → AstrBot大脑 → 控制米家设备
 help: |
   支持小爱音箱语音控制、米家设备管理、TTS播报等功能。

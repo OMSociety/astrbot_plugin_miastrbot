@@ -35,7 +35,7 @@ from .utils.exceptions import (
 PLUGIN_NAME = "astrbot_plugin_miastrbot"
 
 
-@register(PLUGIN_NAME, "Slandre & Flandre & MiniMax", "小爱Agent", "0.0.1")
+@register(PLUGIN_NAME, "Slandre & Flandre & MiniMax", "小爱Astrbot", "0.0.1")
 class MiASTRBotPlugin(Star):
     """miastrbot 插件主类"""
     
@@ -358,7 +358,7 @@ class MiASTRBotPlugin(Star):
     async def _send_help(self, event: AstrMessageEvent, _args: str):
         """发送帮助信息"""
         help_text = """
-小爱Agent 命令帮助：
+小爱Astrbot 命令帮助：
 
 「帮助」/「help」 - 显示此帮助信息
 「状态」/「status」 - 查看服务连接状态

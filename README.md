@@ -8,7 +8,7 @@ AstrBot 小爱音箱 + 米家设备集成插件。
 - 小米账号登录与小爱音箱设备发现
 - 米家账号二维码授权与设备管理
 - 设备别名解析与自然语言控制
-- TTS 播报（edge/openai/azure/native）
+- TTS 播报（edge/openai/azure/native/volcengine）
 - WebUI 管理面板（配置、登录、设备查看）
 
 ## 目录结构
@@ -40,7 +40,7 @@ pip install -r requirements.txt
 - `mihome`：米家 OAuth token 或账号密码
 - `speaker`：对话模式、模型与命令前缀
 - `weather`：天气查询 API key 与默认城市
-- `tts`：TTS 类型、音色、语速
+- `tts`：TTS 引擎、音色、语速（支持火山云 AppID/Token/音色 ID）
 - `webui`：WebUI 开关、监听地址、端口、访问密码、端口冲突处理
 
 ## 使用说明
@@ -59,6 +59,6 @@ pip install -r requirements.txt
 ## 元信息
 
 - 插件名：`astrbot_plugin_miastrbot`
-- 显示名：`小爱Agent`
+- 显示名：`小爱Astrbot`
 - AstrBot 版本要求：`>=4.0.0`
 - 作者：`Slandre & Flandre`
