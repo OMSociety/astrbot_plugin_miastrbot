@@ -177,10 +177,11 @@ class MiASTRBotPlugin(Star):
         
         # 更新 WebUI 服务引用
         init_container(
+            config_manager=self.config_manager,
             xiaomi_service=self.xiaomi_service,
             mihome_service=self.mihome_service,
-            tts_server=self.tts_server,
-            config=agent_config,
+            agent_handler=self.agent_handler,
+            webui_config=webui_config,
         )
     
     async def _login_xiaomi(self) -> bool:
@@ -299,7 +300,9 @@ class MiASTRBotPlugin(Star):
             try:
                 response = await self.agent_handler.process(message_text)
                 if response:
-                    await event.send(response)
+                    result = response.get("result") if isinstance(response, dict) else str(response)
+                    if result:
+                        await event.send(result)
             except Exception as e:
                 self.log.error(f"Agent 处理失败: {e}")
     
@@ -353,7 +356,7 @@ class MiASTRBotPlugin(Star):
     async def _send_status(self, event: AstrMessageEvent, _args: str):
         """发送状态信息"""
         xiaomi_status = "✅ 已连接" if self.xiaomi_service and self.xiaomi_service.is_logged_in() else "❌ 未连接"
-        mihome_status = "✅ 已连接" if self.mihome_service and self.mihome_service.is_logged_in() else "❌ 未连接"
+        mihome_status = "✅ 已连接" if self.mihome_service and self.mihome_service.is_authenticated() else "❌ 未连接"
         tts_status = "✅ 就绪" if self.tts_server else "❌ 未就绪"
         agent_status = "✅ 就绪" if self.agent_handler else "❌ 未就绪"
         
