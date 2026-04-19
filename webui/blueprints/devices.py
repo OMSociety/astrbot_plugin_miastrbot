@@ -87,7 +87,7 @@ async def api_test_tts(text: str = "你好，我是小爱"):
             return {"success": result, "message": "TTS 已发送到小爱音箱" if result else "TTS 发送失败"}
         elif container.tts_server:
             # 如果小爱服务不可用，使用本地 TTS
-            audio_data = await container.tts_server.synthesize(text)
+            audio_data = await container.tts_server.speak(text)
             return {"success": True, "message": "TTS 合成成功", "note": "仅本地合成，未发送到音箱"}
         else:
             return {"success": False, "message": "TTS 服务未初始化"}
