@@ -163,8 +163,9 @@ async def run_async_login(client_id: str, mihome_service):
                 "type": "login_in_progress",
                 "message": "已有登录流程在进行中"
             })
-            if qr_url_holder["url"]:
-                await ws_manager.send_json(client_id, {"type": "qr_url", "url": qr_url_holder["url"]})
+            qr_url = qr_url_holder.get("url")
+            if qr_url:
+                await ws_manager.send_json(client_id, {"type": "qr_url", "url": qr_url})
         else:
             await ws_manager.send_json(client_id, {
                 "type": "login_error",
