@@ -5,6 +5,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from typing import Optional
+from astrbot.api import logger
 from ..dependencies import get_container
 
 router = APIRouter()
@@ -163,3 +164,26 @@ async def api_xiaomi_devices():
         return {"success": True, "data": devices or [], "count": len(devices) if devices else 0}
     except Exception as e:
         return {"success": False, "data": [], "message": str(e)}
+
+
+@router.post("/xiaomi/login")
+async def api_xiaomi_login():
+    """手动触发小米账号登录"""
+    container = get_container()
+    if not container or not container.xiaomi_service:
+        return {"success": False, "message": "小爱服务未初始化"}
+    
+    try:
+        service = container.xiaomi_service
+        logged_in_attr = getattr(service, "is_logged_in", False)
+        logged_in = logged_in_attr() if callable(logged_in_attr) else bool(logged_in_attr)
+        if logged_in:
+            return {"success": True, "message": "小米账号已登录"}
+        
+        success = await service.login()
+        if success:
+            return {"success": True, "message": "小米账号登录成功"}
+        return {"success": False, "message": "小米账号登录失败"}
+    except Exception as e:
+        logger.warning(f"[miastrbot] WebUI 触发小米登录失败: {e}")
+        return {"success": False, "message": "小米账号登录失败，请检查账号配置与网络状态"}
