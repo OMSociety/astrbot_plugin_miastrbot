@@ -1,0 +1,160 @@
+{
+    "_version": {
+        "description": "配置版本号",
+        "type": "int",
+        "default": 1
+    },
+
+    "xiaomi": {
+        "description": "小爱音箱配置",
+        "type": "object",
+        "items": {
+            "account": {
+                "description": "小米账号（邮箱或手机号）",
+                "type": "string",
+                "default": "",
+                "hint": "用于登录小爱音箱服务，与米家账号相同"
+            },
+            "password": {
+                "description": "小米账号密码",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true
+            },
+            "device_id": {
+                "description": "小爱音箱设备DID",
+                "type": "string",
+                "default": "",
+                "hint": "留空则自动选择绑定列表中的第一个设备"
+            },
+            "hardware": {
+                "description": "音箱型号",
+                "type": "string",
+                "default": "L05C",
+                "hint": "L05C(Play增强版)/LX06(Pro)/LX04/X10A/L05B，按型号自动选择通信模式"
+            }
+        }
+    },
+
+    "mihome": {
+        "description": "米家设备配置",
+        "type": "object",
+        "items": {
+            "oauth_token": {
+                "description": "OAuth Token（二维码登录自动生成）",
+                "type": "string",
+                "default": "",
+                "hint": "扫码登录后自动写入，无需手动填写"
+            },
+            "account": {
+                "description": "米家账号",
+                "type": "string",
+                "default": ""
+            },
+            "password": {
+                "description": "米家密码",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true
+            }
+        }
+    },
+
+    "weather": {
+        "description": "天气配置（与日程插件共用同一套配置）",
+        "type": "object",
+        "items": {
+            "weather_api_key": {
+                "description": "心知天气 API Key",
+                "type": "string",
+                "default": "",
+                "hint": "从 https://www.seniverse.com 免费申请，与日程插件共用"
+            },
+            "weather_city": {
+                "description": "默认查询城市",
+                "type": "string",
+                "default": "北京",
+                "hint": "查询天气时使用的默认城市名"
+            }
+        }
+    },
+
+    "speaker": {
+        "description": "Agent 配置",
+        "type": "object",
+        "items": {
+            "model": {
+                "description": "LLM 模型",
+                "type": "string",
+                "default": "gpt-4o-mini",
+                "hint": "用于意图识别和闲聊回复，建议用便宜的模型"
+            },
+            "ai_mode": {
+                "description": "启用 AI 模式",
+                "type": "bool",
+                "default": false,
+                "hint": "开启后，直接发送消息会经过 AI 意图识别处理；关闭则仅响应命令前缀"
+            },
+            "command_prefix": {
+                "description": "命令前缀",
+                "type": "string",
+                "default": "/小爱,",
+                "hint": "逗号分隔，消息以此前缀开头才当作命令处理"
+            }
+        }
+    },
+
+    "tts": {
+        "description": "TTS 播报配置",
+        "type": "object",
+        "items": {
+            "type": {
+                "description": "TTS 引擎类型",
+                "type": "string",
+                "default": "edge",
+                "hint": "edge（微软EdgeTTS，免费）/ openai / azure / native"
+            },
+            "voice": {
+                "description": "TTS 语音角色",
+                "type": "string",
+                "default": "zh-CN-XiaoxiaoNeural",
+                "hint": "edge-tts 支持的中文角色：zh-CN-XiaoxiaoNeural（晓晓）"
+            },
+            "rate": {
+                "description": "语速",
+                "type": "string",
+                "default": "+0%",
+                "hint": "+10%加速，-10%减速"
+            }
+        }
+    },
+
+    "enable_webui": {
+        "description": "启用 WebUI 管理面板",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后可节省资源，登录/设备管理需通过命令操作"
+    },
+    "webui_host": {
+        "description": "WebUI 监听地址",
+        "type": "string",
+        "default": "0.0.0.0"
+    },
+    "webui_port": {
+        "description": "WebUI 端口",
+        "type": "int",
+        "default": 9528
+    },
+    "webui_password": {
+        "description": "WebUI 访问密码",
+        "type": "string",
+        "default": "",
+        "hint": "留空则无密码保护"
+    },
+    "webui_auto_kill": {
+        "description": "自动清理占用端口的进程",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后启动时若端口被占用会自动 kill 旧进程"
+    }
+}
