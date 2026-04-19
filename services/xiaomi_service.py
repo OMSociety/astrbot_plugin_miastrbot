@@ -117,10 +117,19 @@ class XiaomiService:
                 os.path.join(os.path.expanduser("~"), ".mi.token")
             )
             
-            # 登录获取token（兼容不同 miservice 版本：部分版本要求 sid 参数）
+            # 登录获取 token（兼容不同 miservice 版本）
             login_params = inspect.signature(self._account.login).parameters
-            if "sid" in login_params:
+            supports_sid = (
+                "sid" in login_params
+                or any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in login_params.values())
+            )
+            if supports_sid:
+                # micoapi 用于 MiNA 设备能力，xiaomiio 用于 MiIO 指令能力
                 await self._account.login("micoapi")
+                try:
+                    await self._account.login("xiaomiio")
+                except Exception as sid_err:
+                    logger.warning(f"[miastrbot] xiaomiio SID 登录失败，继续使用 micoapi: {sid_err}")
             else:
                 await self._account.login()
             
@@ -136,7 +145,20 @@ class XiaomiService:
             
         except Exception as e:
             logger.error(f"[miastrbot] 小爱账号登录失败: {e}")
+            self._logged_in = False
             raise XiaomiAuthError(f"登录失败: {e}")
+
+    async def _relogin_if_possible(self) -> bool:
+        """在凭证可用时尝试重新登录一次"""
+        account = self.config.get("account") or os.getenv("MI_USER", "")
+        password = self.config.get("password") or os.getenv("MI_PASS", "")
+        if not account or not password:
+            return False
+        try:
+            return await self.login(account=account, password=password)
+        except Exception as e:
+            logger.warning(f"[miastrbot] 自动重登失败: {e}")
+            return False
     
     async def get_devices(self) -> List[Dict[str, Any]]:
         """
@@ -172,6 +194,26 @@ class XiaomiService:
             return devices
             
         except Exception as e:
+            logger.warning(f"[miastrbot] 获取设备列表失败，尝试自动重登: {e}")
+            relogin_ok = await self._relogin_if_possible()
+            if relogin_ok and self._na_service:
+                try:
+                    device_list_raw = await self._na_service.device_list()
+                    devices = []
+                    for device in device_list_raw:
+                        if device.get("extra", {}).get("audio"):
+                            devices.append({
+                                "id": device.get("id"),
+                                "did": device.get("did"),
+                                "name": device.get("name"),
+                                "hardware": device.get("hardware"),
+                                "token": device.get("token"),
+                            })
+                    logger.info(f"[miastrbot] 自动重登后获取到 {len(devices)} 个小爱音箱设备")
+                    return devices
+                except Exception as retry_e:
+                    logger.error(f"[miastrbot] 自动重登后仍获取设备失败: {retry_e}")
+                    raise XiaomiAuthError(f"获取设备失败: {retry_e}")
             logger.error(f"[miastrbot] 获取设备列表失败: {e}")
             raise XiaomiAuthError(f"获取设备失败: {e}")
     

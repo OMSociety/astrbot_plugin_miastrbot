@@ -62,7 +62,7 @@ th{color:#334155;background:#f8fafc}
       <div class="message" id="msgStatus"></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="mihomeLoginCard">
       <h2>米家扫码登录</h2>
       <p class="small">点击“米家扫码登录”后，若获取到链接请用手机米家 App 打开/扫码。</p>
       <div class="qr-url" id="qrBox">
@@ -110,6 +110,17 @@ function hideMsg(id) {
   const node = el(id);
   node.className = "message";
   node.textContent = "";
+}
+
+function setMihomeLoginVisible(visible) {
+  const loginCard = el("mihomeLoginCard");
+  const loginBtn = el("btnMihomeLogin");
+  if (loginCard) loginCard.style.display = visible ? "" : "none";
+  if (loginBtn) loginBtn.style.display = visible ? "" : "none";
+  if (!visible) {
+    el("qrBox").classList.remove("show");
+    hideMsg("msgMihome");
+  }
 }
 
 function renderTable(tbodyId, rows, cols) {
@@ -166,6 +177,7 @@ async function refreshAll() {
     setTag("tagWebui", !!webui.data.authenticated, webui.data.authenticated ? "已登录" : "未登录");
     setTag("tagXiaomi", !!auth.data.xiaomi, auth.data.xiaomi ? "已连接" : "未连接");
     setTag("tagMihome", !!auth.data.mihome, auth.data.mihome ? "已授权" : "未授权");
+    setMihomeLoginVisible(!auth.data.mihome);
 
     if (!devices.data.success) {
       showMsg("msgStatus", devices.data.message || "米家设备获取失败", "bad");
