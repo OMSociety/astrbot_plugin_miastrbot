@@ -115,10 +115,11 @@ function hideMsg(id) {
 function setMihomeLoginVisible(visible) {
   const loginCard = el("mihomeLoginCard");
   const loginBtn = el("btnMihomeLogin");
+  const qrBox = el("qrBox");
   if (loginCard) loginCard.style.display = visible ? "" : "none";
   if (loginBtn) loginBtn.style.display = visible ? "" : "none";
   if (!visible) {
-    el("qrBox").classList.remove("show");
+    if (qrBox) qrBox.classList.remove("show");
     hideMsg("msgMihome");
   }
 }
