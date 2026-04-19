@@ -1,0 +1,33 @@
+# miastrbot 配置文件
+# 复制此文件为 config.yaml 并填写配置
+
+# 小爱音箱配置
+xiaomi:
+  account: ""              # 小米账号
+  password: ""             # 密码
+  device_id: ""            # 小爱音箱 DID（通过 micli list 获取）
+  hardware: "L05C"         # 硬件型号：L05C/LX06/LX04/X10A/L05B
+
+# 米家设备配置
+mihome:
+  oauth_token: ""          # 米家 OAuth Token（优先使用）
+  # 或使用账号密码
+  account: ""
+  password: ""
+
+# 音箱对话配置（独立于全局配置）
+speaker:
+  model: "gpt-4o-mini"    # 音箱专用模型
+  stream: true             # 是否启用流式响应
+
+# TTS配置
+tts:
+  enabled: true
+  type: "edge"             # edge / openai / azure / native
+  voice: "zh-CN-XiaoxiaoNeural"
+
+# WebUI配置
+webui:
+  port: 9528
+  username: "admin"
+  password: "password"
