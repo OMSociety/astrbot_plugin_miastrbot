@@ -41,19 +41,19 @@ class MiASTRBotConfigManager:
             logger.warning(f"[miastrbot] 加载 schema 默认值失败: {e}")
     
     def _inject_defaults(self, target: dict, schema: dict):
-        """递归注入 schema 默认值"""
+        """递归注入 schema 默认值，跳过 _group 等元字段"""
         for key, value in schema.items():
             if key.startswith("_"):
-                continue
+                continue  # 跳过 _group、_group_desc 等元字段
             if isinstance(value, dict) and "items" in value:
-                # 有 items 说明是 section
+                # 有 items 说明是 section（如 xiaomi、mihome）
                 if key not in target:
                     target[key] = {}
                 if isinstance(target[key], dict) and "items" in value:
                     self._inject_defaults(target[key], value["items"])
-            elif key in value and "default" in value:
+            elif isinstance(value, dict) and "default" in value:
                 target.setdefault(key, value["default"])
-    
+
     def _apply_env_overrides(self):
         """环境变量覆盖（最高优先级）"""
         env_mappings = {
