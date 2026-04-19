@@ -92,7 +92,7 @@ async def get_supported_tts():
         {"id": "edge", "name": "Edge TTS", "description": "免费，推荐使用"},
         {"id": "openai", "name": "OpenAI TTS", "description": "需 API Key"},
         {"id": "azure", "name": "Azure TTS", "description": "需 Speech Key"},
-        {"id": "native", "name": "Native TTS", "description": "系统原生 TTS"},
+        {"id": "native", "name": "Native TTS", "description": "系统原生 TTS（本地语音合成）"},
         {"id": "volcengine", "name": "火山云 TTS", "description": "需 AppID/AccessToken/VoiceType"},
     ]
     return {"success": True, "data": tts_engines}

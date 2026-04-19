@@ -349,10 +349,19 @@ class VolcengineTTSProvider(BaseTTSProvider):
         self.appid = config.get("volcengine_appid", "") or os.getenv("VOLCENGINE_APPID", "")
         self.access_token = config.get("volcengine_access_token", "") or os.getenv("VOLCENGINE_ACCESS_TOKEN", "")
         self.voice_type = config.get("volcengine_voice_type", "") or os.getenv("VOLCENGINE_VOICE_TYPE", "")
-        self.sample_rate = int(config.get("volcengine_sample_rate") or 24000)
-        self.speed_ratio = int(config.get("volcengine_speed_ratio") or 0)
-        self.loudness_rate = int(config.get("volcengine_loudness_rate") or 0)
+        self.sample_rate = self._safe_int(config.get("volcengine_sample_rate"), 24000)
+        self.speed_ratio = self._safe_int(config.get("volcengine_speed_ratio"), 0)
+        self.loudness_rate = self._safe_int(config.get("volcengine_loudness_rate"), 0)
         self.resource_id = config.get("volcengine_resource_id", "seed-icl-2.0")
+
+    @staticmethod
+    def _safe_int(value, default: int) -> int:
+        try:
+            if value is None or value == "":
+                return default
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     async def speak(self, text: str) -> bytes:
         if not self.appid or not self.access_token or not self.voice_type:
