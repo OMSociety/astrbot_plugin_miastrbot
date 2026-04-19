@@ -129,7 +129,12 @@ function renderTable(tbodyId, rows, cols) {
 
 async function getJSON(url) {
   const res = await fetch(url, { credentials: "same-origin" });
-  const data = await res.json();
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (_err) {
+    data = { success: false, message: "服务返回了非 JSON 响应" };
+  }
   return { ok: res.ok, data };
 }
 
@@ -139,7 +144,12 @@ async function postForm(url, form = null) {
     body: form,
     credentials: "same-origin"
   });
-  const data = await res.json();
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (_err) {
+    data = { success: false, message: "服务返回了非 JSON 响应" };
+  }
   return { ok: res.ok, data };
 }
 
@@ -179,9 +189,13 @@ async function refreshAll() {
 }
 
 async function xiaomiLogin() {
-  const { data } = await postForm("/miastrbot/api/xiaomi/login");
-  showMsg("msgXiaomi", data.message || (data.success ? "操作成功" : "操作失败"), data.success ? "ok" : "bad");
-  await refreshAll();
+  try {
+    const { data } = await postForm("/miastrbot/api/xiaomi/login");
+    showMsg("msgXiaomi", data.message || (data.success ? "操作成功" : "操作失败"), data.success ? "ok" : "bad");
+    await refreshAll();
+  } catch (_err) {
+    showMsg("msgXiaomi", "小爱登录请求失败，请检查网络后重试", "bad");
+  }
 }
 
 function wsLogin() {
