@@ -145,28 +145,37 @@ async function postForm(url, form = null) {
 
 async function refreshAll() {
   hideMsg("msgStatus");
-  const [webui, auth, devices, xiaomi] = await Promise.all([
-    getJSON("/miastrbot/api/status"),
-    getJSON("/miastrbot/api/auth/status"),
-    getJSON("/miastrbot/api/devices"),
-    getJSON("/miastrbot/api/xiaomi/devices")
-  ]);
+  try {
+    const [webui, auth, devices, xiaomi] = await Promise.all([
+      getJSON("/miastrbot/api/status"),
+      getJSON("/miastrbot/api/auth/status"),
+      getJSON("/miastrbot/api/devices"),
+      getJSON("/miastrbot/api/xiaomi/devices")
+    ]);
 
-  setTag("tagWebui", !!webui.data.authenticated, webui.data.authenticated ? "已登录" : "未登录");
-  setTag("tagXiaomi", !!auth.data.xiaomi, auth.data.xiaomi ? "已连接" : "未连接");
-  setTag("tagMihome", !!auth.data.mihome, auth.data.mihome ? "已授权" : "未授权");
+    setTag("tagWebui", !!webui.data.authenticated, webui.data.authenticated ? "已登录" : "未登录");
+    setTag("tagXiaomi", !!auth.data.xiaomi, auth.data.xiaomi ? "已连接" : "未连接");
+    setTag("tagMihome", !!auth.data.mihome, auth.data.mihome ? "已授权" : "未授权");
 
-  if (!devices.data.success) {
-    showMsg("msgStatus", devices.data.message || "米家设备获取失败", "bad");
+    if (!devices.data.success) {
+      showMsg("msgStatus", devices.data.message || "米家设备获取失败", "bad");
+    }
+    renderTable("mihomeDevices", devices.data.data || [], 3);
+
+    if (!xiaomi.data.success && xiaomi.data.message) {
+      showMsg("msgXiaomi", xiaomi.data.message, "bad");
+    } else {
+      hideMsg("msgXiaomi");
+    }
+    renderTable("xiaomiDevices", xiaomi.data.data || [], 3);
+  } catch (_err) {
+    setTag("tagWebui", false, "异常");
+    setTag("tagXiaomi", false, "异常");
+    setTag("tagMihome", false, "异常");
+    showMsg("msgStatus", "状态刷新失败，请稍后重试", "bad");
+    renderTable("mihomeDevices", [], 3);
+    renderTable("xiaomiDevices", [], 3);
   }
-  renderTable("mihomeDevices", devices.data.data || [], 3);
-
-  if (!xiaomi.data.success && xiaomi.data.message) {
-    showMsg("msgXiaomi", xiaomi.data.message, "bad");
-  } else {
-    hideMsg("msgXiaomi");
-  }
-  renderTable("xiaomiDevices", xiaomi.data.data || [], 3);
 }
 
 async function xiaomiLogin() {
@@ -186,7 +195,13 @@ function wsLogin() {
   };
 
   ws.onmessage = async (event) => {
-    const msg = JSON.parse(event.data || "{}");
+    let msg = {};
+    try {
+      msg = JSON.parse(event.data || "{}");
+    } catch (_err) {
+      showMsg("msgMihome", "收到无效登录响应，请重试", "bad");
+      return;
+    }
     if (msg.type === "qr_url" && msg.url) {
       el("qrUrl").textContent = msg.url;
       el("qrBox").classList.add("show");

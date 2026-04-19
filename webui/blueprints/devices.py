@@ -173,12 +173,13 @@ async def api_xiaomi_login():
         return {"success": False, "message": "小爱服务未初始化"}
     
     try:
-        if container.xiaomi_service._logged_in:
+        service = container.xiaomi_service
+        if bool(getattr(service, "is_logged_in", False)):
             return {"success": True, "message": "小米账号已登录"}
         
-        success = await container.xiaomi_service.login()
+        success = await service.login()
         if success:
             return {"success": True, "message": "小米账号登录成功"}
         return {"success": False, "message": "小米账号登录失败"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+    except Exception:
+        return {"success": False, "message": "小米账号登录失败，请检查账号配置与网络状态"}
