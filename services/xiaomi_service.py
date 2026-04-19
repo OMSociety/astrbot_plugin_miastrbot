@@ -8,6 +8,7 @@
 
 import os
 import asyncio
+import inspect
 from typing import Optional, List, Dict, Any, Callable
 from astrbot.api import logger
 
@@ -116,8 +117,12 @@ class XiaomiService:
                 os.path.join(os.path.expanduser("~"), ".mi.token")
             )
             
-            # 登录获取token
-            await self._account.login()
+            # 登录获取token（兼容不同 miservice 版本：部分版本要求 sid 参数）
+            login_params = inspect.signature(self._account.login).parameters
+            if len(login_params) >= 1:
+                await self._account.login("micoapi")
+            else:
+                await self._account.login()
             
             # 初始化服务
             self._ios_service = MiIOService(self._account)

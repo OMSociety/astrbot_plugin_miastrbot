@@ -253,7 +253,7 @@ class MiHomeService:
                 
                 if not qr_found and qr_callback:
                     url = self._extract_qr_url(full_buffer)
-                    if url and "ticket=" in url and "sid=" in url:
+                    if url:
                         qr_found = True
                         await qr_callback(url)
                         logger.info("[miastrbot] 二维码 URL 已推送")
@@ -301,13 +301,14 @@ class MiHomeService:
         patterns = [
             r'(https://account\.xiaomi\.com/pass/qr/login\?[^\s\'"]+)',
             r'(https://api\.io\.micloud\.xiaomi\.com/qr[^\s\'"]+)',
+            r'(https?://[^\s\'"]*xiaomi\.com[^\s\'"]*qr[^\s\'"]*)',
             r'二维码[：:]\s*(https://[^\s]+)',
             r'URL[：:]\s*(https://[^\s]+)',
         ]
         for pattern in patterns:
             match = re.search(pattern, buffer_text)
             if match:
-                return match.group(1).replace("&amp;", "&")
+                return match.group(1).replace("&amp;", "&").replace("\\/", "/")
         return ""
     
     async def _refresh_devices_cache(self):
