@@ -133,8 +133,11 @@ class Server:
                     logger.error(f"[miastrbot] 端口 {self.port} 被占用，auto_kill 已禁用，请手动清理或更换端口")
                     raise RuntimeError(f"端口 {self.port} 被占用")
             
-            # 获取配置并创建应用
+            # 获取配置并创建应用（防御：容器可能未初始化）
             container = get_container()
+            if container is None or container.webui_config is None:
+                logger.error("[miastrbot] 容器未初始化，WebUI 配置不可用，请检查插件初始化日志")
+                raise RuntimeError("容器未初始化，无法启动 WebUI")
             self.app = create_app(container.webui_config)
             
             # 在守护线程中启动服务
