@@ -88,13 +88,16 @@ class MiASTRBotPlugin(Star):
             self.log.info("WebUI 已禁用")
             return
         
+        # 初始化 WebUI 配置（必须在 init_container 之前定义）
+        webui_config = WebUIConfig(
+            host=self.config_manager.get("webui_host", "0.0.0.0"),
+            port=self.config_manager.get("webui_port", 9528),
+            password=self.config_manager.get("webui_password", "")
+        )
+        
+        # 初始化容器（必须在 webui_config 定义之后）
+    
         try:
-            # 初始化 WebUI 配置
-            webui_config = WebUIConfig(
-                host=self.config_manager.get("webui_host", "0.0.0.0"),
-                port=self.config_manager.get("webui_port", 9528),
-                password=self.config_manager.get("webui_password", "")
-            )
             auto_kill = self.config_manager.get("webui_auto_kill", False)
             self._webui_server = Server(
                 host=webui_config.host,
@@ -175,14 +178,7 @@ class MiASTRBotPlugin(Star):
         except Exception as e:
             self.log.error(f"Agent Handler 初始化失败: {e}")
         
-        init_container(
-            config_manager=self.config_manager,
-            xiaomi_service=self.xiaomi_service,
-            mihome_service=self.mihome_service,
-            agent_handler=self.agent_handler,
-            webui_config=webui_config,
-        )
-    
+
     async def _login_xiaomi(self) -> bool:
         """登录小爱音箱"""
         if not self.xiaomi_service:
