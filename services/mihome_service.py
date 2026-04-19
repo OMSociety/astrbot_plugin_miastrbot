@@ -23,6 +23,7 @@ import asyncio
 import time
 from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
+from urllib.parse import urlparse
 from astrbot.api import logger
 
 try:
@@ -253,7 +254,7 @@ class MiHomeService:
                 
                 if not qr_found and qr_callback:
                     url = self._extract_qr_url(full_buffer)
-                    if url:
+                    if url and self._is_likely_qr_login_url(url):
                         qr_found = True
                         await qr_callback(url)
                         logger.info("[miastrbot] 二维码 URL 已推送")
@@ -299,9 +300,8 @@ class MiHomeService:
         """从输出缓冲区提取二维码登录链接"""
         import re
         patterns = [
-            r'(https://account\.xiaomi\.com/pass/qr/login\?[^\s\'"]+)',
-            r'(https://api\.io\.micloud\.xiaomi\.com/qr[^\s\'"]+)',
-            r'(https?://(?:account\.xiaomi\.com|api\.io\.micloud\.xiaomi\.com)/[^\s\'"]*qr[^\s\'"]*)',
+            r'(https://account\.xiaomi\.com/[^\s\'"]*qr[^\s\'"]*)',
+            r'(https://api\.io\.micloud\.xiaomi\.com/[^\s\'"]*qr[^\s\'"]*)',
             r'二维码[：:]\s*(https://[^\s]+)',
             r'URL[：:]\s*(https://[^\s]+)',
         ]
@@ -310,6 +310,19 @@ class MiHomeService:
             if match:
                 return match.group(1).replace("&amp;", "&").replace("\\/", "/")
         return ""
+
+    def _is_likely_qr_login_url(self, url: str) -> bool:
+        """判断 URL 是否像小米扫码登录链接"""
+        try:
+            parsed = urlparse(url)
+            host = (parsed.netloc or "").lower()
+            path = (parsed.path or "").lower()
+            query = (parsed.query or "").lower()
+            if host not in {"account.xiaomi.com", "api.io.micloud.xiaomi.com"}:
+                return False
+            return ("qr" in path) or ("qr" in query)
+        except Exception:
+            return False
     
     async def _refresh_devices_cache(self):
         """刷新设备缓存并重建别名映射"""
