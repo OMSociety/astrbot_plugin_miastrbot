@@ -46,7 +46,7 @@ async def update_tts_config(tts_type: str, voice: Optional[str] = None):
     
     try:
         container.config_manager.set("tts.engine", tts_type)
-        container.config_manager.set("tts.type", tts_type)  # 兼容旧键 tts.type（当前标准键为 tts.engine）
+        container.config_manager.set("tts.type", tts_type)  # 兼容旧键 tts.type
         if voice:
             container.config_manager.set("tts.voice", voice)
         

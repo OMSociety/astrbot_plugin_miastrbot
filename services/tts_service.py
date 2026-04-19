@@ -349,9 +349,9 @@ class VolcengineTTSProvider(BaseTTSProvider):
         self.appid = config.get("volcengine_appid", "") or os.getenv("VOLCENGINE_APPID", "")
         self.access_token = config.get("volcengine_access_token", "") or os.getenv("VOLCENGINE_ACCESS_TOKEN", "")
         self.voice_type = config.get("volcengine_voice_type", "") or os.getenv("VOLCENGINE_VOICE_TYPE", "")
-        self.sample_rate = int(config.get("volcengine_sample_rate", 24000))
-        self.speed_ratio = int(config.get("volcengine_speed_ratio", 0))
-        self.loudness_rate = int(config.get("volcengine_loudness_rate", 0))
+        self.sample_rate = int(config.get("volcengine_sample_rate") or 24000)
+        self.speed_ratio = int(config.get("volcengine_speed_ratio") or 0)
+        self.loudness_rate = int(config.get("volcengine_loudness_rate") or 0)
         self.resource_id = config.get("volcengine_resource_id", "seed-icl-2.0")
 
     async def speak(self, text: str) -> bytes:
@@ -508,4 +508,3 @@ class TTSServer:
     async def list_available_voices() -> list:
         """列出所有可用的Edge TTS语音"""
         return await EdgeTTSProvider.list_voices()
-
