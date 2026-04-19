@@ -23,7 +23,7 @@ import asyncio
 import time
 from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from astrbot.api import logger
 
 try:
@@ -300,8 +300,8 @@ class MiHomeService:
         """从输出缓冲区提取二维码登录链接"""
         import re
         patterns = [
-            r'(https://account\.xiaomi\.com/[^\s\'"]*qr[^\s\'"]*)',
-            r'(https://api\.io\.micloud\.xiaomi\.com/[^\s\'"]*qr[^\s\'"]*)',
+            r'(https://account\.xiaomi\.com/[^\s\'"]*/qr(?:/[^\s\'"]*)?(?:\?[^\s\'"]*)?)',
+            r'(https://api\.io\.micloud\.xiaomi\.com/[^\s\'"]*/qr(?:/[^\s\'"]*)?(?:\?[^\s\'"]*)?)',
             r'二维码[：:]\s*(https://[^\s]+)',
             r'URL[：:]\s*(https://[^\s]+)',
         ]
@@ -317,10 +317,15 @@ class MiHomeService:
             parsed = urlparse(url)
             host = (parsed.netloc or "").lower()
             path = (parsed.path or "").lower()
-            query = (parsed.query or "").lower()
             if host not in {"account.xiaomi.com", "api.io.micloud.xiaomi.com"}:
                 return False
-            return ("qr" in path) or ("qr" in query)
+            path_segments = [seg for seg in path.split("/") if seg]
+            query_keys = {k.lower() for k in parse_qs(parsed.query or "").keys()}
+            return (
+                "qr" in path_segments
+                or "qr" in query_keys
+                or "ticket" in query_keys
+            )
         except Exception:
             return False
     
