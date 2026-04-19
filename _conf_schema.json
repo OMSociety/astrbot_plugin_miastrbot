@@ -73,7 +73,7 @@
             "command_prefix": {
                 "description": "命令前缀",
                 "type": "string",
-                "default": "/小爱,",
+                "default": "/小爱",
                 "hint": "逗号分隔，带此前缀才当作命令处理"
             }
         }
