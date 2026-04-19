@@ -5,6 +5,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from typing import Optional
+from astrbot.api import logger
 from ..dependencies import get_container
 
 router = APIRouter()
@@ -174,12 +175,13 @@ async def api_xiaomi_login():
     
     try:
         service = container.xiaomi_service
-        if bool(getattr(service, "is_logged_in", False)):
+        if getattr(service, "is_logged_in", False):
             return {"success": True, "message": "小米账号已登录"}
         
         success = await service.login()
         if success:
             return {"success": True, "message": "小米账号登录成功"}
         return {"success": False, "message": "小米账号登录失败"}
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[miastrbot] WebUI 触发小米登录失败: {e}")
         return {"success": False, "message": "小米账号登录失败，请检查账号配置与网络状态"}
