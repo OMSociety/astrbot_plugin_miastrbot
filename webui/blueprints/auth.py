@@ -111,7 +111,7 @@ LOGIN_PAGE_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>miastrbot - 登录</title>
+    <title>小爱Astrbot - 登录</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -171,7 +171,7 @@ LOGIN_PAGE_HTML = """<!DOCTYPE html>
         <div class="login-card">
             <div class="logo">
                 <div class="logo-icon">🏠</div>
-                <h1>miastrbot</h1>
+                <h1>小爱Astrbot</h1>
                 <p class="subtitle">小爱音箱 + 米家控制中心</p>
             </div>
             <form id="loginForm">
@@ -182,7 +182,7 @@ LOGIN_PAGE_HTML = """<!DOCTYPE html>
                 <button type="submit" class="btn">登 录</button>
                 <p class="error" id="errorMsg"></p>
             </form>
-            <p class="footer">miastrbot v2.0</p>
+            <p class="footer">小爱Astrbot v2.0</p>
         </div>
     </div>
     <script>

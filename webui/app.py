@@ -63,7 +63,7 @@ def create_app(webui_config=None):
     static_dir = os.path.join(plugin_dir, "web_res", "static")
     
     app = FastAPI(
-        title="miastrbot",
+        title="小爱Astrbot",
         description="小爱 + 米家 + AstrBot",
         version="2.0.0"
     )
@@ -92,7 +92,7 @@ def create_app(webui_config=None):
         index_path = os.path.join(static_dir, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
-        return HTMLResponse(content="<h1>miastrbot WebUI</h1>")
+        return HTMLResponse(content="<h1>小爱Astrbot WebUI</h1>")
     
     @app.get("/miastrbot/static/{path:path}")
     async def static_files(path: str):

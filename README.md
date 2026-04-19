@@ -37,7 +37,7 @@ pip install -r requirements.txt
 复制 `config.yaml.example` 并按需填写：
 
 - `xiaomi`：小爱音箱账号、密码、设备 DID、硬件型号
-- `mihome`：米家 OAuth token 或账号密码
+- `mihome`：米家登录状态与数据目录（账号授权在 WebUI 扫码完成）
 - `speaker`：对话模式、模型与命令前缀
 - `weather`：天气查询 API key 与默认城市
 - `tts`：TTS 引擎、音色、语速（支持火山云 AppID/Token/音色 ID）
