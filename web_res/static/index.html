@@ -6,58 +6,208 @@
 <title>miastrbot 管理面板</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f0f23;color:#e0e0e0;min-height:100vh}
-.container{max-width:900px;margin:0 auto;padding:40px 20px}
-h1{font-size:2rem;margin-bottom:8px;color:#7dd3fc}
-.subtitle{color:#94a3b8;margin-bottom:40px;font-size:.95rem}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-.card{background:#1e1e3f;border:1px solid #2a2a5a;border-radius:12px;padding:24px;text-decoration:none;color:inherit;transition:border-color .2s,transform .2s}
-.card:hover{border-color:#7dd3fc;transform:translateY(-2px)}
-.card h2{font-size:1.1rem;margin-bottom:8px;color:#e2e8f0}
-.card p{font-size:.85rem;color:#94a3b8;line-height:1.5}
-.card .icon{font-size:2rem;margin-bottom:12px}
-.status{display:flex;align-items:center;gap:8px;font-size:.9rem;margin-top:16px}
-.dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
-.dot.online{background:#4ade80}
-.dot.offline{background:#f87171}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f4fbf8;color:#0f172a;min-height:100vh}
+.container{max-width:1100px;margin:0 auto;padding:28px 16px 48px}
+h1{font-size:1.9rem;margin-bottom:8px;color:#19CD90}
+.subtitle{color:#64748b;margin-bottom:24px;font-size:.95rem}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+button,.btn-link{border:none;border-radius:10px;padding:10px 14px;font-size:14px;cursor:pointer;text-decoration:none;display:inline-block}
+.btn-primary{background:#19CD90;color:#fff}
+.btn-primary:hover{background:#16b782}
+.btn-secondary{background:#e2e8f0;color:#0f172a}
+.btn-secondary:hover{background:#d3dce6}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px}
+.card h2{font-size:1.05rem;color:#0f172a;margin-bottom:10px}
+.small{font-size:13px;color:#64748b}
+.status-list{list-style:none;display:grid;gap:8px}
+.status-item{display:flex;align-items:center;justify-content:space-between;font-size:14px;padding:8px 10px;border-radius:8px;background:#f8fafc}
+.tag{padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.ok{background:#dcfce7;color:#166534}
+.bad{background:#fee2e2;color:#991b1b}
+.message{margin-top:10px;padding:10px;border-radius:8px;font-size:13px;display:none}
+.message.show{display:block}
+.message.ok{background:#dcfce7;color:#166534}
+.message.bad{background:#fee2e2;color:#991b1b}
+.message.info{background:#e0f2fe;color:#0c4a6e}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:left}
+th{color:#334155;background:#f8fafc}
+.qr-url{display:none;margin-top:10px;padding:10px;background:#f8fafc;border-radius:8px}
+.qr-url.show{display:block}
 </style>
 </head>
 <body>
 <div class="container">
   <h1>🎵 miastrbot</h1>
-  <p class="subtitle">小爱音箱 + 米家设备 · AstrBot 管理面板</p>
-  <div class="cards">
-    <a href="/miastrbot/api/devices" class="card">
-      <div class="icon">📡</div>
-      <h2>设备管理</h2>
-      <p>查看和控制米家设备，实时状态监控</p>
-    </a>
-    <a href="/miastrbot/api/status" class="card">
-      <div class="icon">📊</div>
-      <h2>服务状态</h2>
-      <p>小爱音箱、米家、TTS、Agent 连接状态</p>
-    </a>
-    <a href="/miastrbot/api/config" class="card">
-      <div class="icon">⚙️</div>
-      <h2>插件配置</h2>
-      <p>查看和修改当前配置（请谨慎操作）</p>
-    </a>
-    <a href="/miastrbot/api/xiaomi/devices" class="card">
-      <div class="icon">🔐</div>
-      <h2>小爱登录</h2>
-      <p>查看小爱设备与登录状态</p>
-    </a>
-    <a href="/miastrbot/api/auth/qr_status" class="card">
-      <div class="icon">📱</div>
-      <h2>米家授权</h2>
-      <p>查看米家扫码授权状态</p>
-    </a>
-    <a href="/miastrbot/api/logout" class="card">
-      <div class="icon">🚪</div>
-      <h2>退出登录</h2>
-      <p>清除当前登录状态</p>
-    </a>
+  <p class="subtitle">小爱音箱 + 米家设备 · 可视化管理与登录</p>
+
+  <div class="toolbar">
+    <button class="btn-primary" id="btnRefresh">刷新状态</button>
+    <button class="btn-primary" id="btnXiaomiLogin">小爱重新登录</button>
+    <button class="btn-primary" id="btnMihomeLogin">米家扫码登录</button>
+    <a class="btn-link btn-secondary" href="/miastrbot/api/logout">退出 WebUI</a>
+    <a class="btn-link btn-secondary" href="/miastrbot/api/config" target="_blank">查看配置</a>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>连接状态</h2>
+      <ul class="status-list">
+        <li class="status-item"><span>WebUI 登录</span><span class="tag" id="tagWebui">检查中</span></li>
+        <li class="status-item"><span>小爱账号</span><span class="tag" id="tagXiaomi">检查中</span></li>
+        <li class="status-item"><span>米家授权</span><span class="tag" id="tagMihome">检查中</span></li>
+      </ul>
+      <div class="message" id="msgStatus"></div>
+    </section>
+
+    <section class="card">
+      <h2>米家扫码登录</h2>
+      <p class="small">点击“米家扫码登录”后，若获取到链接请用手机米家 App 打开/扫码。</p>
+      <div class="qr-url" id="qrBox">
+        <div class="small">扫码链接：</div>
+        <div class="mono" id="qrUrl"></div>
+      </div>
+      <div class="message" id="msgMihome"></div>
+    </section>
+
+    <section class="card">
+      <h2>米家设备</h2>
+      <table>
+        <thead><tr><th>名称</th><th>DID</th><th>型号</th></tr></thead>
+        <tbody id="mihomeDevices"><tr><td colspan="3" class="small">加载中...</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>小爱设备</h2>
+      <table>
+        <thead><tr><th>名称</th><th>DID</th><th>型号</th></tr></thead>
+        <tbody id="xiaomiDevices"><tr><td colspan="3" class="small">加载中...</td></tr></tbody>
+      </table>
+      <div class="message" id="msgXiaomi"></div>
+    </section>
   </div>
 </div>
+
+<script>
+const el = (id) => document.getElementById(id);
+
+function setTag(id, ok, text) {
+  const node = el(id);
+  node.className = `tag ${ok ? "ok" : "bad"}`;
+  node.textContent = text;
+}
+
+function showMsg(id, text, type = "info") {
+  const node = el(id);
+  node.className = `message show ${type}`;
+  node.textContent = text;
+}
+
+function hideMsg(id) {
+  const node = el(id);
+  node.className = "message";
+  node.textContent = "";
+}
+
+function renderTable(tbodyId, rows, cols) {
+  const tbody = el(tbodyId);
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="${cols}" class="small">暂无数据</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${r.name || "-"}</td>
+      <td class="mono">${r.did || r.id || "-"}</td>
+      <td>${r.model || r.hardware || "-"}</td>
+    </tr>
+  `).join("");
+}
+
+async function getJSON(url) {
+  const res = await fetch(url, { credentials: "same-origin" });
+  const data = await res.json();
+  return { ok: res.ok, data };
+}
+
+async function postForm(url, form = null) {
+  const res = await fetch(url, {
+    method: "POST",
+    body: form,
+    credentials: "same-origin"
+  });
+  const data = await res.json();
+  return { ok: res.ok, data };
+}
+
+async function refreshAll() {
+  hideMsg("msgStatus");
+  const [webui, auth, devices, xiaomi] = await Promise.all([
+    getJSON("/miastrbot/api/status"),
+    getJSON("/miastrbot/api/auth/status"),
+    getJSON("/miastrbot/api/devices"),
+    getJSON("/miastrbot/api/xiaomi/devices")
+  ]);
+
+  setTag("tagWebui", !!webui.data.authenticated, webui.data.authenticated ? "已登录" : "未登录");
+  setTag("tagXiaomi", !!auth.data.xiaomi, auth.data.xiaomi ? "已连接" : "未连接");
+  setTag("tagMihome", !!auth.data.mihome, auth.data.mihome ? "已授权" : "未授权");
+
+  if (!devices.data.success) {
+    showMsg("msgStatus", devices.data.message || "米家设备获取失败", "bad");
+  }
+  renderTable("mihomeDevices", devices.data.data || [], 3);
+
+  if (!xiaomi.data.success && xiaomi.data.message) {
+    showMsg("msgXiaomi", xiaomi.data.message, "bad");
+  } else {
+    hideMsg("msgXiaomi");
+  }
+  renderTable("xiaomiDevices", xiaomi.data.data || [], 3);
+}
+
+async function xiaomiLogin() {
+  const { data } = await postForm("/miastrbot/api/xiaomi/login");
+  showMsg("msgXiaomi", data.message || (data.success ? "操作成功" : "操作失败"), data.success ? "ok" : "bad");
+  await refreshAll();
+}
+
+function wsLogin() {
+  hideMsg("msgMihome");
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${window.location.host}/miastrbot/api/ws/login`);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ action: "start_login" }));
+    showMsg("msgMihome", "已发起登录流程，等待二维码链接...", "info");
+  };
+
+  ws.onmessage = async (event) => {
+    const msg = JSON.parse(event.data || "{}");
+    if (msg.type === "qr_url" && msg.url) {
+      el("qrUrl").textContent = msg.url;
+      el("qrBox").classList.add("show");
+      showMsg("msgMihome", "已获取扫码链接，请尽快用米家 App 扫码/打开。", "ok");
+    } else if (msg.type === "login_success") {
+      showMsg("msgMihome", msg.message || "米家登录成功", "ok");
+      ws.close();
+      await refreshAll();
+    } else if (msg.type === "login_error") {
+      showMsg("msgMihome", msg.error || "米家登录失败", "bad");
+      ws.close();
+    }
+  };
+
+  ws.onerror = () => showMsg("msgMihome", "WebSocket 连接失败，请检查服务状态", "bad");
+}
+
+el("btnRefresh").addEventListener("click", refreshAll);
+el("btnXiaomiLogin").addEventListener("click", xiaomiLogin);
+el("btnMihomeLogin").addEventListener("click", wsLogin);
+refreshAll();
+</script>
 </body>
 </html>

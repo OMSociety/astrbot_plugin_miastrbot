@@ -163,3 +163,22 @@ async def api_xiaomi_devices():
         return {"success": True, "data": devices or [], "count": len(devices) if devices else 0}
     except Exception as e:
         return {"success": False, "data": [], "message": str(e)}
+
+
+@router.post("/xiaomi/login")
+async def api_xiaomi_login():
+    """手动触发小米账号登录"""
+    container = get_container()
+    if not container or not container.xiaomi_service:
+        return {"success": False, "message": "小爱服务未初始化"}
+    
+    try:
+        if container.xiaomi_service._logged_in:
+            return {"success": True, "message": "小米账号已登录"}
+        
+        success = await container.xiaomi_service.login()
+        if success:
+            return {"success": True, "message": "小米账号登录成功"}
+        return {"success": False, "message": "小米账号登录失败"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
