@@ -308,7 +308,7 @@ class MiHomeService:
         for pattern in patterns:
             match = re.search(pattern, buffer_text)
             if match:
-                return match.group(1).replace("&amp;", "&").replace("\\/", "/")
+                return match.group(1).replace("&amp;", "&")
         return ""
 
     def _is_likely_qr_login_url(self, url: str) -> bool:
@@ -327,7 +327,7 @@ class MiHomeService:
                 or "ticket" in query_keys
             )
         except Exception:
-            logger.debug(f"[小爱Astrbot] 二维码链接校验失败: {url}")
+            logger.debug(f"[miastrbot] 二维码链接校验失败: {url}")
             return False
     
     async def _refresh_devices_cache(self):
