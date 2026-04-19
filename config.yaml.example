@@ -27,9 +27,16 @@ weather:
 
 # ========== TTS 播报 ==========
 tts:
-  type: "edge"               # edge（免费，推荐）/ openai / azure / native
+  engine: "edge"             # edge（免费，推荐）/ openai / azure / native / volcengine
+  type: "edge"               # 兼容旧版本配置，建议使用 engine 作为主配置键
   voice: "zh-CN-XiaoxiaoNeural"
   rate: "+0%"                # +10% 加速，-10% 减速
+  volcengine_appid: ""       # 火山云 AppID（engine=volcengine 时必填）
+  volcengine_access_token: "" # 火山云 Access Token（必填）
+  volcengine_voice_type: ""  # 火山云音色 ID（Speaker ID，必填）
+  volcengine_sample_rate: 24000
+  volcengine_speed_ratio: 0  # -50 到 100
+  volcengine_loudness_rate: 0 # -50 到 100
 
 # ========== WebUI 管理面板 ==========
 webui:

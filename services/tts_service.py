@@ -9,9 +9,13 @@ TTS服务 (TTSServer)
 import asyncio
 import tempfile
 import os
+import base64
+import json
+import uuid
 from typing import Optional
 from abc import ABC, abstractmethod
 from astrbot.api import logger
+import aiohttp
 
 # 尝试导入各TTS库
 try:
@@ -334,6 +338,125 @@ class NativeTTSProvider(BaseTTSProvider):
             raise TTSServerError(f"Linux TTS 失败: {e}")
 
 
+class VolcengineTTSProvider(BaseTTSProvider):
+    """
+    火山引擎 TTS 提供者（火山云）
+    参考：openspeech.bytedance.com v3 SSE 接口
+    """
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.appid = config.get("volcengine_appid", "") or os.getenv("VOLCENGINE_APPID", "")
+        self.access_token = config.get("volcengine_access_token", "") or os.getenv("VOLCENGINE_ACCESS_TOKEN", "")
+        self.voice_type = config.get("volcengine_voice_type", "") or os.getenv("VOLCENGINE_VOICE_TYPE", "")
+        self.sample_rate = max(8000, self._safe_int(config.get("volcengine_sample_rate"), 24000))
+        self.speed_ratio = self._clamp(self._safe_int(config.get("volcengine_speed_ratio"), 0), -50, 100)
+        self.loudness_rate = self._clamp(self._safe_int(config.get("volcengine_loudness_rate"), 0), -50, 100)
+        self.resource_id = config.get("volcengine_resource_id", "seed-icl-2.0")
+
+    @staticmethod
+    def _safe_int(value, default: int) -> int:
+        try:
+            if value is None or value == "":
+                return default
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _clamp(value: int, min_value: int, max_value: int) -> int:
+        return max(min_value, min(max_value, value))
+
+    async def speak(self, text: str) -> bytes:
+        if not self.appid or not self.access_token or not self.voice_type:
+            raise TTSServerError("火山云 TTS 配置不完整（volcengine_appid/access_token/voice_type）")
+
+        headers = {
+            "X-Api-App-Id": self.appid,
+            "X-Api-Access-Key": self.access_token,
+            "X-Api-Resource-Id": self.resource_id,
+            "Content-Type": "application/json",
+            "Connection": "keep-alive",
+        }
+        payload = {
+            "user": {"uid": str(uuid.uuid4())},
+            "req_params": {
+                "text": text,
+                "speaker": self.voice_type,
+                "audio_params": {
+                    "format": "mp3",
+                    "sample_rate": self.sample_rate,
+                    "enable_timestamp": True,
+                    "speech_rate": self.speed_ratio,
+                    "loudness_rate": self.loudness_rate,
+                },
+                "additions": json.dumps(
+                    {
+                        "explicit_language": "zh-cn",
+                        "disable_markdown_filter": True,
+                        "enable_latex_tn": True,
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        }
+
+        url = "https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse"
+        audio_data = bytearray()
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=payload) as response:
+                    if response.status != 200:
+                        detail = await response.text()
+                        raise TTSServerError(f"火山云 TTS 请求失败: HTTP {response.status} - {detail[:300]}")
+
+                    buffer = ""
+                    stream_done = False
+                    async for chunk in response.content.iter_any():
+                        if not chunk:
+                            continue
+                        buffer += chunk.decode("utf-8", errors="ignore")
+                        lines = buffer.splitlines(keepends=True)
+                        if lines and not lines[-1].endswith(("\n", "\r")):
+                            buffer = lines.pop()
+                        else:
+                            buffer = ""
+
+                        for line in lines:
+                            line_str = line.strip()
+                            if not line_str.startswith("data:"):
+                                continue
+                            data_str = line_str[len("data:"):].strip()
+                            if not data_str:
+                                continue
+                            try:
+                                data = json.loads(data_str)
+                            except json.JSONDecodeError:
+                                continue
+
+                            if data.get("code") == 0 and data.get("data"):
+                                try:
+                                    audio_data.extend(base64.b64decode(data["data"]))
+                                except Exception as decode_error:
+                                    logger.debug(f"[miastrbot] 火山云 TTS 数据块解码失败: {decode_error}")
+                            elif data.get("code") == 20000000:
+                                stream_done = True
+                                break
+                        if stream_done:
+                            break
+
+            if not audio_data:
+                raise TTSServerError("火山云 TTS 未返回音频数据")
+            logger.debug(f"[miastrbot] 火山云 TTS 生成成功，文本长度: {len(text)}")
+            return bytes(audio_data)
+        except TTSServerError:
+            raise
+        except Exception as e:
+            logger.error(f"[miastrbot] 火山云 TTS 合成失败: {e}")
+            raise TTSServerError(f"火山云 TTS 合成失败: {e}")
+
+
 class TTSServer:
     """
     TTS服务统一入口
@@ -346,6 +469,7 @@ class TTSServer:
         "openai": OpenAITTSProvider,
         "azure": AzureTTSProvider,
         "native": NativeTTSProvider,
+        "volcengine": VolcengineTTSProvider,
     }
     
     def __init__(self, config: dict):
@@ -357,7 +481,7 @@ class TTSServer:
         """
         self.config = config
         self.enabled = config.get("enabled", True)
-        self.tts_type = config.get("engine", "edge")
+        self.tts_type = config.get("engine") or config.get("type", "edge")
         
         # 创建TTS提供者
         provider_class = self.PROVIDERS.get(self.tts_type)
@@ -410,7 +534,3 @@ class TTSServer:
     async def list_available_voices() -> list:
         """列出所有可用的Edge TTS语音"""
         return await EdgeTTSProvider.list_voices()
-
-
-# 添加os导入
-import os

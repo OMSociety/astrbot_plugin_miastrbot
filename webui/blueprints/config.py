@@ -45,7 +45,8 @@ async def update_tts_config(tts_type: str, voice: Optional[str] = None):
         return {"success": False, "message": "配置管理器未初始化"}
     
     try:
-        container.config_manager.set("tts.type", tts_type)
+        container.config_manager.set("tts.engine", tts_type)
+        container.config_manager.set("tts.type", tts_type)  # 兼容旧键 tts.type
         if voice:
             container.config_manager.set("tts.voice", voice)
         
@@ -91,6 +92,7 @@ async def get_supported_tts():
         {"id": "edge", "name": "Edge TTS", "description": "免费，推荐使用"},
         {"id": "openai", "name": "OpenAI TTS", "description": "需 API Key"},
         {"id": "azure", "name": "Azure TTS", "description": "需 Speech Key"},
-        {"id": "mi", "name": "小米原生 TTS", "description": "使用小爱音箱内置"},
+        {"id": "native", "name": "Native TTS", "description": "系统原生 TTS（本地语音合成）"},
+        {"id": "volcengine", "name": "火山云 TTS", "description": "需 AppID/AccessToken/VoiceType"},
     ]
     return {"success": True, "data": tts_engines}

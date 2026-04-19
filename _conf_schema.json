@@ -105,7 +105,7 @@
                 "description": "TTS 引擎",
                 "type": "string",
                 "default": "edge",
-                "hint": "edge（免费，推荐）/ openai / azure / native"
+                "hint": "edge（免费，推荐）/ openai / azure / native / volcengine"
             },
             "voice": {
                 "description": "语音角色",
@@ -118,6 +118,41 @@
                 "type": "string",
                 "default": "+0%",
                 "hint": "+10% 加速，-10% 减速"
+            },
+            "volcengine_appid": {
+                "description": "火山云 AppID",
+                "type": "string",
+                "default": "",
+                "hint": "使用 volcengine 引擎时必填"
+            },
+            "volcengine_access_token": {
+                "description": "火山云 Access Token",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true
+            },
+            "volcengine_voice_type": {
+                "description": "火山云音色 ID",
+                "type": "string",
+                "default": "",
+                "hint": "音色克隆生成的 Speaker ID"
+            },
+            "volcengine_sample_rate": {
+                "description": "火山云采样率",
+                "type": "int",
+                "default": 24000
+            },
+            "volcengine_speed_ratio": {
+                "description": "火山云语速",
+                "type": "int",
+                "default": 0,
+                "hint": "-50 到 100"
+            },
+            "volcengine_loudness_rate": {
+                "description": "火山云音量",
+                "type": "int",
+                "default": 0,
+                "hint": "-50 到 100"
             }
         }
     },
