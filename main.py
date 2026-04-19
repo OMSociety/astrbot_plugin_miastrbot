@@ -290,7 +290,7 @@ class MiASTRBotPlugin(Star):
         message_text = event.message_str.strip()
         
         # 检查是否为命令
-        command_prefixes = self.config_manager.get("speaker.command_prefix", "/小爱,").split(",")
+        command_prefixes = [p.strip() for p in self.config_manager.get("speaker.command_prefix", "/小爱").split(",") if p.strip()] or ["/小爱"]
         
         for prefix in command_prefixes:
             if message_text.startswith(prefix.strip()):
