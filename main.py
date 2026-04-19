@@ -12,7 +12,7 @@ import os
 import asyncio
 from typing import Optional
 
-from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.event import filter, AstrMessageEvent, MessageChain, Plain
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger as astrbot_logger
 
@@ -297,7 +297,7 @@ class MiASTRBotPlugin(Star):
                 if response:
                     result = response.get("result") if isinstance(response, dict) else str(response)
                     if result:
-                        await event.send(result)
+                        await event.send(MessageChain([Plain(result)]))
             except Exception as e:
                 self.log.error(f"Agent 处理失败: {e}")
     
@@ -327,10 +327,10 @@ class MiASTRBotPlugin(Star):
             try:
                 await handler(event, args)
             except Exception as e:
-                await event.send(f"命令执行失败: {e}")
+                await event.send(MessageChain([Plain(f"命令执行失败: {e}")]))
                 self.log.error(f"命令 {cmd} 执行失败: {e}")
         else:
-            await event.send(f"未知命令: {cmd}，发送「帮助」查看可用命令")
+            await event.send(MessageChain([Plain(f"未知命令: {cmd}，发送「帮助」查看可用命令")]))
     
     async def _send_help(self, event: AstrMessageEvent, _args: str):
         """发送帮助信息"""
@@ -346,7 +346,7 @@ class MiASTRBotPlugin(Star):
 
 或者直接发送消息与小爱对话（需开启AI模式）
         """.strip()
-        await event.send(help_text)
+        await event.send(MessageChain([Plain(help_text)]))
     
     async def _send_status(self, event: AstrMessageEvent, _args: str):
         """发送状态信息"""
@@ -363,11 +363,11 @@ class MiASTRBotPlugin(Star):
 └─ Agent: {agent_status}
         """.strip()
         
-        await event.send(status_text)
+        await event.send(MessageChain([Plain(status_text)]))
     
     async def _handle_login(self, event: AstrMessageEvent, _args: str):
         """处理登录"""
-        await event.send("正在登录...")
+        await event.send(MessageChain([Plain("正在登录...")]))
         
         tasks = []
         if self.xiaomi_service:
@@ -378,29 +378,29 @@ class MiASTRBotPlugin(Star):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         success_count = sum(1 for r in results if r is True)
-        await event.send(f"登录完成: {success_count}/{len(tasks)} 服务成功")
+        await event.send(MessageChain([Plain(f"登录完成: {success_count}/{len(tasks)} 服务成功")]))
     
     async def _list_devices(self, event: AstrMessageEvent, _args: str):
         """列出设备"""
         device_list = await self.list_mihome_devices()
-        await event.send(device_list)
+        await event.send(MessageChain([Plain(device_list)]))
     
     async def _handle_control(self, event: AstrMessageEvent, args: str):
         """处理设备控制"""
         parts = args.split(maxsplit=1)
         if len(parts) < 2:
-            await event.send("用法: 「控制 <设备别名> <动作>\n例如: 「控制 客厅灯 开」")
+            await event.send(MessageChain([Plain("用法: 「控制 <设备别名> <动作>\n例如: 「控制 客厅灯 开」")]))
             return
         
         device_alias, action = parts
         result = await self.control_mihome_device(device_alias, action)
-        await event.send(result)
+        await event.send(MessageChain([Plain(result)]))
     
     async def _handle_speak(self, event: AstrMessageEvent, args: str):
         """处理播报"""
         if not args:
-            await event.send("用法: 「播报 <内容>」")
+            await event.send(MessageChain([Plain("用法: 「播报 <内容>」")]))
             return
         
         result = await self.speak_to_xiaomi(args)
-        await event.send(result)
+        await event.send(MessageChain([Plain(result)]))
