@@ -185,7 +185,7 @@ LOGIN_PAGE_HTML = """<!DOCTYPE html>
                 <button type="submit" class="btn">登 录</button>
                 <p class="error" id="errorMsg"></p>
             </form>
-            <p class="footer">小爱Astrbot v0.1.0</p>
+            <p class="footer">小爱Astrbot</p>
         </div>
     </div>
     <script>
