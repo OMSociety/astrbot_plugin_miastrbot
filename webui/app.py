@@ -64,8 +64,7 @@ def create_app(webui_config=None):
     
     app = FastAPI(
         title="小爱Astrbot",
-        description="小爱 + 米家 + AstrBot",
-        version="0.1.0"
+        description="小爱 + 米家 + AstrBot"
     )
     
     # 添加登录验证中间件
