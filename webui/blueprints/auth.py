@@ -7,6 +7,7 @@ import secrets
 from fastapi import APIRouter, Form, Cookie, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from typing import Optional
+from astrbot.api import logger
 
 router = APIRouter()
 
@@ -99,7 +100,9 @@ async def logout_get(session_id: Optional[str] = Cookie(default=None, alias="mia
 async def status(session_id: Optional[str] = Cookie(default=None, alias="miastrbot_session")):
     """获取登录状态"""
     is_auth = is_authenticated(session_id)
-    print(f"[Auth Status] session_id: {session_id[:8] if session_id else None}, authenticated: {is_auth}")
+    logger.debug(
+        f"[miastrbot] Auth status check: session={session_id[:8] if session_id else 'none'}, authenticated={is_auth}"
+    )
     return {
         "authenticated": is_auth,
     }
@@ -182,7 +185,7 @@ LOGIN_PAGE_HTML = """<!DOCTYPE html>
                 <button type="submit" class="btn">登 录</button>
                 <p class="error" id="errorMsg"></p>
             </form>
-            <p class="footer">小爱Astrbot v2.0</p>
+            <p class="footer">小爱Astrbot</p>
         </div>
     </div>
     <script>

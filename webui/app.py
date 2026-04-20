@@ -6,11 +6,11 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, HTMLResponse, FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from astrbot.api import logger
 from .blueprints import auth, devices, config, oauth
-from .dependencies import get_container
 
 # Session 管理从 dependencies 导入
-from .dependencies import is_authenticated, add_session, remove_session
+from .dependencies import is_authenticated
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -40,7 +40,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             session_id = request.cookies.get("miastrbot_session")
             if not session_id or not is_authenticated(session_id):
                 # 未登录，重定向到登录页
-                print(f"[AuthMiddleware] 未认证或无效 session: {session_id}")
+                logger.debug("[miastrbot] 未认证或无效 session（首页访问）")
                 return RedirectResponse(url="/miastrbot/api/login", status_code=302)
             return await call_next(request)
         
@@ -50,7 +50,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             
             if not session_id or not is_authenticated(session_id):
                 # 未登录，重定向到登录页
-                print(f"[AuthMiddleware] 未认证或无效 session: {session_id}")
+                logger.debug("[miastrbot] 未认证或无效 session（页面访问）")
                 return RedirectResponse(url="/miastrbot/api/login", status_code=302)
         
         response = await call_next(request)
@@ -64,8 +64,7 @@ def create_app(webui_config=None):
     
     app = FastAPI(
         title="小爱Astrbot",
-        description="小爱 + 米家 + AstrBot",
-        version="2.0.0"
+        description="小爱 + 米家 + AstrBot"
     )
     
     # 添加登录验证中间件
