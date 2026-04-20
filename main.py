@@ -255,9 +255,7 @@ class MiASTRBotPlugin(Star):
         
         try:
             result = await self.mihome_service.control_device(device_alias, action)
-            if isinstance(result, dict):
-                return result.get("message", f"{device_alias} 控制完成")
-            return str(result)
+            return result.get("message", f"{device_alias} 控制完成")
         except MiHomeControlError as e:
             return f"控制设备失败: {e}"
     
