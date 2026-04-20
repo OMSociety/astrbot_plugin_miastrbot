@@ -8,7 +8,7 @@ AstrBot 小爱音箱 + 米家设备集成插件。
 - 小米账号登录与小爱音箱设备发现
 - 米家账号二维码授权与设备管理
 - 设备别名解析与自然语言控制
-- TTS 播报（edge/openai/azure/native/volcengine）
+- TTS 播报（edge/openai/native/volcengine，azure 预留）
 - WebUI 管理面板（配置、登录、设备查看）
 
 ## 目录结构

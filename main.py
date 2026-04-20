@@ -14,7 +14,6 @@ from typing import Optional
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.core.message.components import Plain
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger as astrbot_logger
 
 from .config_manager import MiASTRBotConfigManager
 from .services.xiaomi_service import XiaomiService, XiaomiAuthError, XiaomiCommandError
@@ -23,13 +22,7 @@ from .services.tts_service import TTSServer, TTSServerError
 from .agent.handler import AgentHandler
 from .webui import init_container, Server
 from .webui.config import WebUIConfig
-from .utils.events import EventManager
 from .utils.logging import init_logging
-from .utils.exceptions import (
-    MiASTRBotError,
-    MiASTRBotConfigError,
-    MiASTRBotServiceError,
-)
 
 PLUGIN_NAME = "astrbot_plugin_miastrbot"
 
@@ -63,6 +56,7 @@ class MiASTRBotPlugin(Star):
         # 生命周期任务
         self._webui_server = None
         self._running = False
+        self._services_initialized = False
         self._init_lock = asyncio.Lock()
         
         self.log.info("插件初始化完成")
@@ -76,12 +70,9 @@ class MiASTRBotPlugin(Star):
         await super().initialize()
         
         # 先初始化服务（包括 mihome_service），再启动 WebUI
-        try:
-            await self._init_services()
-        except Exception as e:
-            self.log.error(f"❌ 服务初始化失败: {e}")
-            import traceback
-            self.log.error(traceback.format_exc())
+        if not await self._ensure_services_initialized():
+            self.log.error("❌ 服务初始化失败，WebUI 将跳过启动")
+            return
         
         # 检查是否启用 WebUI
         enable_webui = self.config_manager.get("webui.enable", True)
@@ -125,6 +116,7 @@ class MiASTRBotPlugin(Star):
         插件被禁用时调用
         """
         self._running = False
+        self._services_initialized = False
         
         # 停止 WebUI 服务器
         if self._webui_server:
@@ -180,7 +172,24 @@ class MiASTRBotPlugin(Star):
             self.log.info("Agent Handler 初始化完成")
         except Exception as e:
             self.log.error(f"Agent Handler 初始化失败: {e}")
-        
+    
+    async def _ensure_services_initialized(self) -> bool:
+        """确保服务仅初始化一次（带锁防止并发重复初始化）"""
+        if self._services_initialized:
+            return True
+        async with self._init_lock:
+            if self._services_initialized:
+                return True
+            try:
+                await self._init_services()
+                self._services_initialized = True
+                self._running = True
+                return True
+            except Exception as e:
+                self._services_initialized = False
+                self._running = False
+                self.log.error(f"服务初始化失败: {e}")
+                return False
 
     async def _login_xiaomi(self) -> bool:
         """登录小爱音箱"""
@@ -246,7 +255,9 @@ class MiASTRBotPlugin(Star):
         
         try:
             result = await self.mihome_service.control_device(device_alias, action)
-            return result
+            if isinstance(result, dict):
+                return result.get("message", f"{device_alias} 控制完成")
+            return str(result)
         except MiHomeControlError as e:
             return f"控制设备失败: {e}"
     
@@ -268,7 +279,7 @@ class MiASTRBotPlugin(Star):
         
         try:
             result = await self.xiaomi_service.send_tts(text)
-            return result
+            return "播报成功" if result else "播报失败"
         except XiaomiCommandError as e:
             return f"播报失败: {e}"
     
@@ -281,17 +292,10 @@ class MiASTRBotPlugin(Star):
         if not event.message_str:
             return
         
-        # 延迟初始化服务（带锁防止重复初始化）
-        if not self._running:
-            async with self._init_lock:
-                if not self._running:  # 双重检查锁定模式
-                    self._running = True
-                    try:
-                        await self._init_services()
-                    except Exception as e:
-                        self._running = False
-                        self.log.error(f"延迟初始化失败: {e}")
-                        return
+        # 首次消息兜底初始化（避免生命周期钩子异常时不可用）
+        if not await self._ensure_services_initialized():
+            self.log.error("延迟初始化失败")
+            return
         
         message_text = event.message_str.strip()
         

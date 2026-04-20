@@ -3,11 +3,45 @@
 配置蓝图 - 配置管理
 """
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 from typing import Optional, Dict, Any
 from ..dependencies import get_container
 
 router = APIRouter()
+
+SENSITIVE_KEYWORDS = {
+    "password",
+    "passwd",
+    "token",
+    "secret",
+    "api_key",
+    "key",
+    "account",
+    "cookie",
+    "credential",
+    "access_token",
+}
+
+
+def _is_sensitive_key(key: str) -> bool:
+    key_l = (key or "").lower()
+    return any(word in key_l for word in SENSITIVE_KEYWORDS)
+
+
+def _sanitize_config(value: Any, parent_key: str = "") -> Any:
+    if isinstance(value, dict):
+        sanitized: Dict[str, Any] = {}
+        for key, sub_value in value.items():
+            if _is_sensitive_key(key):
+                sanitized[key] = "***" if sub_value else ""
+            else:
+                sanitized[key] = _sanitize_config(sub_value, key)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_config(item, parent_key) for item in value]
+    if _is_sensitive_key(parent_key):
+        return "***" if value else ""
+    return value
+
 
 @router.get("/config")
 async def get_config():
@@ -18,21 +52,7 @@ async def get_config():
     
     try:
         raw_config = container.config_manager.raw
-        
-        # 脱敏处理
-        safe_config = {}
-        for key, value in raw_config.items():
-            if key in ["xiaomi", "mihome"]:
-                safe_config[key] = {}
-                if isinstance(value, dict):
-                    for sub_key, sub_value in value.items():
-                        if sub_key in ["password", "account", "oauth_token"]:
-                            safe_config[key][sub_key] = "***" if sub_value else ""
-                        else:
-                            safe_config[key][sub_key] = sub_value
-            else:
-                safe_config[key] = value
-        
+        safe_config = _sanitize_config(raw_config)
         return {"success": True, "data": safe_config}
     except Exception as e:
         return {"success": False, "message": str(e)}
@@ -91,7 +111,7 @@ async def get_supported_tts():
     tts_engines = [
         {"id": "edge", "name": "Edge TTS", "description": "免费，推荐使用"},
         {"id": "openai", "name": "OpenAI TTS", "description": "需 API Key"},
-        {"id": "azure", "name": "Azure TTS", "description": "需 Speech Key"},
+        {"id": "azure", "name": "Azure TTS", "description": "预留占位，当前版本暂未实现"},
         {"id": "native", "name": "Native TTS", "description": "系统原生 TTS（本地语音合成）"},
         {"id": "volcengine", "name": "火山云 TTS", "description": "需 AppID/AccessToken/VoiceType"},
     ]

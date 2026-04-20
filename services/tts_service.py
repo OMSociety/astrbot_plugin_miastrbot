@@ -191,9 +191,10 @@ class OpenAITTSProvider(BaseTTSProvider):
 
 class AzureTTSProvider(BaseTTSProvider):
     """
-    Azure TTS提供者
-    
-    需要配置 azure_speech_key 和 azure_speech_region
+    Azure TTS 提供者（预留占位）。
+
+    注意：当前版本尚未接入 azure-cognitiveservices-speech，
+    仅保留配置结构并在调用时返回“暂未实现”。
     """
     
     def __init__(self, config: dict):
@@ -203,7 +204,7 @@ class AzureTTSProvider(BaseTTSProvider):
         self.voice = config.get("voice", "zh-CN-XiaoxiaoNeural")
     
     async def speak(self, text: str) -> bytes:
-        """使用Azure TTS进行语音合成"""
+        """使用 Azure TTS 进行语音合成（当前未实现）"""
         if not self.key:
             raise TTSServerError("未配置 Azure Speech Key")
         

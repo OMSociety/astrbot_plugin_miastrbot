@@ -25,7 +25,7 @@ weather:
 
 # ========== TTS 播报 ==========
 tts:
-  engine: "edge"             # edge（免费，推荐）/ openai / azure / native / volcengine
+  engine: "edge"             # edge（免费，推荐）/ openai / azure(预留，暂未实现) / native / volcengine
   type: "edge"               # 兼容旧版本配置，建议使用 engine 作为主配置键
   voice: "zh-CN-XiaoxiaoNeural"
   rate: "+0%"                # +10% 加速，-10% 减速

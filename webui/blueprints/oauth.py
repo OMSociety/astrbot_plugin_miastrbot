@@ -14,6 +14,8 @@ router = APIRouter()
 import logging
 logger = logging.getLogger("miastrbot.oauth")
 
+from ..dependencies import is_authenticated
+
 
 # WebSocket 连接管理器
 class ConnectionManager:
@@ -70,6 +72,11 @@ async def websocket_login(websocket: WebSocket):
     - 服务端推送: {"type": "login_success"}
     - 服务端推送: {"type": "login_error", "error": "..."}
     """
+    session_id = websocket.cookies.get("miastrbot_session")
+    if not session_id or not is_authenticated(session_id):
+        await websocket.close(code=1008)
+        return
+
     import uuid
     client_id = str(uuid.uuid4())
     await ws_manager.connect(client_id, websocket)

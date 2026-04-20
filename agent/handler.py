@@ -3,25 +3,20 @@
 Agent指令处理器 (AgentHandler)
 
 负责：
-1. 意图识别（基于 LLM）
+1. 意图识别（关键词优先 + LLM占位回退）
 2. 设备控制指令解析
 3. 天气查询（心知天气 API）
-4. 闲聊回复（基于 LLM）
+4. 闲聊回复（当前为内置规则）
 5. TTS 格式化
 """
 
-import json
 import re
-import asyncio
 from typing import Dict, Any, Optional, List
 
 from astrbot.api import logger
 
 from .prompts import (
-    SYSTEM_PROMPT,
     INTENT_PROMPT,
-    DEVICE_CONTROL_PROMPT,
-    CHAT_PROMPT,
 )
 
 
@@ -145,13 +140,12 @@ class AgentHandler:
     
     async def _llm_recognize_intent(self, text: str) -> str:
         """
-        使用 LLM 识别意图
-        
-        适合关键词难以判断的模糊场景
+        LLM 意图识别占位逻辑。
+
+        当前版本尚未接入 AstrBot 的实际 LLM 推理调用，
+        此方法仅保留提示词上下文构建并回落到关键词策略。
         """
         try:
-            import aiohttp
-            
             # 从 mihome_service 获取设备名作为上下文
             devices_context = ""
             if self.mihome_service:
@@ -164,13 +158,8 @@ class AgentHandler:
                 user_input=text,
                 devices_context=devices_context,
             )
-            
-            async with aiohttp.ClientSession() as session:
-                # 复用 astrbot 全局 LLM，这里用简单 HTTP 调用
-                # 实际项目中可接入 AstrBot 的 LLM API
-                # 此处先用硬编码意图映射作为 fallback
-                pass
-            
+            _ = prompt
+
             # Fallback: 关键词判断
             control_kws = ["开", "关", "打开", "关闭", "启动", "调"]
             if any(kw in text for kw in control_kws):
