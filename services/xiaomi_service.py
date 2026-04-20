@@ -138,13 +138,19 @@ class XiaomiService:
             
             self._logged_in = True
             logger.info("[miastrbot] 小爱账号登录成功")
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"[miastrbot] 小爱账号登录失败: {e}")
             self._logged_in = False
             raise XiaomiAuthError(f"登录失败: {e}")
+
+    def _reinit_na_service(self):
+        """重建 NA service（重登后调用，避免复用旧 session）"""
+        if self._account:
+            self._na_service = MiNAService(self._account)
+            logger.debug("[miastrbot] NA service 已重建")
 
     async def _relogin_if_possible(self) -> bool:
         """在凭证可用时尝试重新登录一次，重建 NA service"""
@@ -157,7 +163,7 @@ class XiaomiService:
             success = await self.login(account=account, password=password)
             if success:
                 # 重建 NA service 使用新 token
-                self._init_na_service()
+                self._reinit_na_service()
                 logger.info("[miastrbot] 自动重登成功，NA service 已重建")
             return success
         except Exception as e:
@@ -198,7 +204,7 @@ class XiaomiService:
             try:
                 # 首次或重试后需重建 NA service（避免复用旧session）
                 if attempt > 0:
-                    self._init_na_service()
+                    self._reinit_na_service()
                 device_list_raw = await self._na_service.device_list()
                 devices = self._extract_audio_devices(device_list_raw)
                 logger.info(f"[miastrbot] 获取到 {len(devices)} 个小爱音箱设备")
