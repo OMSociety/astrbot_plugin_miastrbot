@@ -5,6 +5,7 @@ miastrbot - AstrBot 小爱音箱+米家设备集成插件
 小爱音箱作为语音入口， AstrBot 作为大脑，米家设备作为执行终端
 
 作者: Slandre & Flandre
+版本: 0.0.9
 """
 
 import os
@@ -34,7 +35,7 @@ from .utils.exceptions import (
 PLUGIN_NAME = "astrbot_plugin_miastrbot"
 
 
-@register(PLUGIN_NAME, "Slandre & Flandre", "小爱Astrbot", "0.1.0")
+@register(PLUGIN_NAME, "Slandre & Flandre", "小爱Agent", "0.0.9")
 class MiASTRBotPlugin(Star):
     """miastrbot 插件主类"""
     
@@ -67,10 +68,7 @@ class MiASTRBotPlugin(Star):
         
         self.log.info("插件初始化完成")
     
-    # _load_from_env() 已移至 ConfigManager，保留方法以兼容外部调用
-    def _load_from_env(self):
-        """从环境变量加载敏感配置（由 ConfigManager 处理）"""
-        pass
+
 
     async def initialize(self):
         await super().initialize()
@@ -176,6 +174,7 @@ class MiASTRBotPlugin(Star):
                 mihome_service=self.mihome_service,
                 tts_server=self.tts_server,
                 config=agent_config,
+                context=self.context,
             )
             self.log.info("Agent Handler 初始化完成")
         except Exception as e:
