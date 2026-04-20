@@ -207,8 +207,10 @@ class XiaomiService:
                 last_error = e
                 logger.warning(f"[miastrbot] 获取设备列表失败 (尝试 {attempt+1}/{MAX_RETRIES+1}): {e}")
                 if attempt < MAX_RETRIES:
+                    logger.info(f"[miastrbot] 尝试自动重登...")
                     relogin_ok = await self._relogin_if_possible()
                     if not relogin_ok:
+                        logger.warning(f"[miastrbot] 自动重登失败，放弃重试")
                         break  # 重登失败就不要再试了
         
         logger.error(f"[miastrbot] 获取设备列表最终失败: {last_error}")
