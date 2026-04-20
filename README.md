@@ -4,6 +4,8 @@
 [![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A5v4.0.0-green.svg)](https://github.com/AstrBotDevs/AstrBot)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-orange.svg)](LICENSE)
 
+> 🤖 **AI Generated** — 本插件全是AI写的
+
 小爱音箱 + 米家设备集成插件。以小爱音箱为语音入口，AstrBot 为大脑，米家设备为执行终端，实现自然语言控制智能家居。
 
 [快速开始](#-快速开始) • [功能总览](#-功能总览) • [架构说明](#-架构说明) • [目录结构](#-目录结构) • [更新日志](#-更新日志)
