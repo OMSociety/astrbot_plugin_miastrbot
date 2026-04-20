@@ -255,7 +255,7 @@ class MiASTRBotPlugin(Star):
         
         try:
             result = await self.mihome_service.control_device(device_alias, action)
-            return result.get("message", f"{device_alias} 控制完成")
+            return result.get("message", f"{device_alias} 执行{action}完成")
         except MiHomeControlError as e:
             return f"控制设备失败: {e}"
     
@@ -277,7 +277,13 @@ class MiASTRBotPlugin(Star):
         
         try:
             result = await self.xiaomi_service.send_tts(text)
-            return "播报成功" if result else "播报失败"
+            if result is True:
+                return "播报成功"
+            if isinstance(result, dict):
+                return result.get("message", "播报失败")
+            if isinstance(result, str):
+                return result
+            return "播报失败"
         except XiaomiCommandError as e:
             return f"播报失败: {e}"
     
