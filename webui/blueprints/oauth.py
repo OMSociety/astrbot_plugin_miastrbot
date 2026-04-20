@@ -301,9 +301,9 @@ async def logout():
     return {"success": True, "message": "已登出"}
 
 
-@router.get("/devices")
+@router.get("/oauth/devices")
 async def oauth_list_devices():
-    """获取设备列表（OAuth 蓝图，已废弃，请使用 /api/devices）"""
+    """获取设备列表（兼容路径：/miastrbot/api/oauth/devices，推荐改用 devices.py 的 /miastrbot/api/devices）。"""
     container = get_container()
     if not container or not container.mihome_service:
         return {"success": False, "data": [], "message": "米家服务未初始化"}
