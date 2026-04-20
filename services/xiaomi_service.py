@@ -165,11 +165,29 @@ class XiaomiService:
             logger.warning("[miastrbot] 自动重登失败: 未配置账号密码")
             return False
         try:
+            # 清除旧 token 缓存，强制重新认证
+            if self._account and hasattr(self._account, 'token'):
+                self._account.token = None
+            if self._account and hasattr(self._account, 'token_store') and self._account.token_store:
+                try:
+                    import os
+                    if os.path.exists(self._account.token_store.token_path):
+                        os.remove(self._account.token_store.token_path)
+                        logger.info(f"[miastrbot] 已删除旧token文件: {self._account.token_store.token_path}")
+                except Exception as rm_err:
+                    logger.warning(f"[miastrbot] 删除旧token文件失败: {rm_err}")
+            
             success = await self.login(account=account, password=password)
             if success:
-                # 重建 NA service 使用新 token
+                # 记录新 token 状态
+                token_info = self._account.token if self._account else {}
+                token_previews = {
+                    k: (v[:8]+"..." if isinstance(v, str) and len(v) > 20 else v)
+                    for k, v in (token_info or {}).items()
+                }
+                logger.info(f"[miastrbot] 自动重登成功，token状态: {token_previews}")
                 self._reinit_services()
-                logger.info("[miastrbot] 自动重登成功，NA service 已重建")
+                logger.info("[miastrbot] IO/NA service 已重建")
             return success
         except Exception as e:
             logger.warning(f"[miastrbot] 自动重登失败: {e}")
@@ -202,27 +220,37 @@ class XiaomiService:
         if not self._logged_in:
             raise XiaomiAuthError("请先调用 login() 登录")
         
-        MAX_RETRIES = 1  # 最多重试1次，防止无限循环
+        MAX_RETRIES = 2  # 最多重试2次
         last_error = None
         
         for attempt in range(MAX_RETRIES + 1):
             try:
-                # 首次或重试后需重建 NA service（避免复用旧session）
+                # 首次或重试后需重建服务（避免复用旧session）
                 if attempt > 0:
                     self._reinit_services()
+                logger.info(f"[miastrbot] 调用 device_list，attempt={attempt+1}")
                 device_list_raw = await self._na_service.device_list()
                 devices = self._extract_audio_devices(device_list_raw)
                 logger.info(f"[miastrbot] 获取到 {len(devices)} 个小爱音箱设备")
                 return devices
             except Exception as e:
                 last_error = e
-                logger.warning(f"[miastrbot] 获取设备列表失败 (尝试 {attempt+1}/{MAX_RETRIES+1}): {e}")
+                err_str = str(e)
+                # 尝试从错误信息提取 HTTP 状态码
+                import re
+                http_code = re.search(r"HTTP (\d+)", err_str) or re.search(r"status.?(\d{3})", err_str, re.I)
+                http_code = http_code.group(1) if http_code else "N/A"
+                logger.warning(f"[miastrbot] 获取设备列表失败 (尝试 {attempt+1}/{MAX_RETRIES+1}) HTTP={http_code}: {e}")
                 if attempt < MAX_RETRIES:
+                    # 检查是否是认证错误（401/403），非认证错误直接退出
+                    if http_code not in ("401", "403", "N/A"):
+                        logger.warning(f"[miastrbot] 非认证错误 {http_code}，跳过重登")
+                        break
                     logger.info(f"[miastrbot] 尝试自动重登...")
                     relogin_ok = await self._relogin_if_possible()
                     if not relogin_ok:
                         logger.warning(f"[miastrbot] 自动重登失败，放弃重试")
-                        break  # 重登失败就不要再试了
+                        break
         
         logger.error(f"[miastrbot] 获取设备列表最终失败: {last_error}")
         raise XiaomiAuthError(f"获取设备失败: {last_error}")
