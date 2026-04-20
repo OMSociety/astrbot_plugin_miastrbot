@@ -144,36 +144,6 @@ astrbot_plugin_miastrbot/
 
 ---
 
-## 📝 更新日志
-
-### v0.0.9
-
-**Bug 修复与稳定性提升**
-
-- 修复 `get_devices` 死循环问题，加 `MAX_RETRIES=1` 限制
-- 登录失败后自动重建 NA service，防止重试无效
-- 统一版本号与 GitHub 仓库地址
-
-### v0.0.8
-
-**Agent 意图识别重写**
-
-- `_llm_recognize_intent` 补全，真正接入 AstrBot LLM
-- `AgentHandler` 支持 `context` 参数，实现 LLM 调用
-- 删除 `main.py` 中冗余的空方法 `_load_from_env`
-
-### v0.0.7
-
-**对话历史注入（schedule_assistant 插件）**
-
-- 喝水/洗澡/睡觉提醒时注入对话历史上下文
-- 提醒发出后自动记录到对话历史
-- 对话历史限制 10 条 / 1 小时 / ~500 token
-
-> **[查看完整更新日志 →](CHANGELOG.md)**
-
----
-
 ## ⚠️ 常见问题
 
 **Q: 小爱登录失败 `Login failed`**
@@ -204,5 +174,3 @@ astrbot_plugin_miastrbot/
 ## 👤 作者
 
 **Slandre & Flandre** — [@OMSociety](https://github.com/OMSociety)
-
-Made with ❤️ by OMSoc
