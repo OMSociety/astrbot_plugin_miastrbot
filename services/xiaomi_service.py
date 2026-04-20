@@ -149,9 +149,13 @@ class XiaomiService:
     def _reinit_services(self):
         """重建所有服务（重登后调用，避免复用旧 session）"""
         if self._account:
+            token_preview = getattr(self._account, "token", None) or "N/A"
+            if isinstance(token_preview, str) and len(token_preview) > 20:
+                token_preview = token_preview[:10] + "..." + token_preview[-5:]
+            logger.info(f"[miastrbot] 重登后重建服务，token预览: {token_preview}")
             self._ios_service = MiIOService(self._account)
             self._na_service = MiNAService(self._account)
-            logger.debug("[miastrbot] IO service 和 NA service 已重建")
+            logger.info("[miastrbot] IO service 和 NA service 已重建")
 
     async def _relogin_if_possible(self) -> bool:
         """在凭证可用时尝试重新登录一次，重建 NA service"""
