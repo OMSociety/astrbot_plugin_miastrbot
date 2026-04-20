@@ -75,6 +75,7 @@ class MiASTRBotPlugin(Star):
         # 先初始化服务（包括 mihome_service），再启动 WebUI
         try:
             await self._init_services()
+            self._running = True
         except Exception as e:
             self.log.error(f"❌ 服务初始化失败: {e}")
             import traceback
