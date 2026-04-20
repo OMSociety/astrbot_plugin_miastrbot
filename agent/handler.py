@@ -46,7 +46,7 @@ class AgentHandler:
     4. 返回 {intent, result, tts_text} 统一格式
     """
     
-    def __init__(self, xiaomi_service=None, mihome_service=None, tts_server=None, config: Dict[str, Any] = None):
+    def __init__(self, xiaomi_service=None, mihome_service=None, tts_server=None, config: Dict[str, Any] = None, context=None):
         """
         初始化 Agent 处理器
         
@@ -55,11 +55,13 @@ class AgentHandler:
             mihome_service: 米家服务实例
             tts_server: TTS 服务实例
             config: 配置字典（包含 model, weather_api_key, weather_city）
+            context: AstrBot Context，用于调用 LLM
         """
         self.config = config or {}
         self.xiaomi_service = xiaomi_service
         self.mihome_service = mihome_service
         self.tts_server = tts_server
+        self.context = context
         
         # LLM 模型
         self.model = self.config.get("model", "gpt-4o-mini")
@@ -165,17 +167,15 @@ class AgentHandler:
                 devices_context=devices_context,
             )
             
-            async with aiohttp.ClientSession() as session:
-                # 复用 astrbot 全局 LLM，这里用简单 HTTP 调用
-                # 实际项目中可接入 AstrBot 的 LLM API
-                # 此处先用硬编码意图映射作为 fallback
-                pass
-            
-            # Fallback: 关键词判断
-            control_kws = ["开", "关", "打开", "关闭", "启动", "调"]
-            if any(kw in text for kw in control_kws):
-                return IntentType.DEVICE_CONTROL
-            return IntentType.DEVICE_QUERY
+            if self.context:
+                resp = await self.context.llm_generate(prompt=f"你是意图识别器。用户说：{text}\n{devices_context}\n只输出意图类型：DEVICE_CONTROL / DEVICE_QUERY / CHAT / WEATHER_QUERY / TIME_QUERY / UNKNOWN")
+                result = (resp.completion_text or resp.text or "").strip().upper()
+                for itype in IntentType:
+                    if itype.value.upper().replace("_", "") in result.replace("_", ""):
+                        return itype
+                logger.debug(f"[miastrbot] LLM意图结果: {result}，fallback关键词判断")
+            else:
+                logger.warning("[miastrbot] 无 context，无法使用 LLM 意图识别")
         
         except Exception as e:
             logger.warning(f"[miastrbot] LLM意图识别失败，使用关键词 fallback: {e}")
