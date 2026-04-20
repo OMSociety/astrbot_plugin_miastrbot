@@ -52,8 +52,7 @@ class MiASTRBotPlugin(Star):
         # 初始化配置管理器
         self.config_manager = MiASTRBotConfigManager(config)
         
-        # 敏感信息优先从环境变量读取
-        self._load_from_env()
+        # 敏感信息由 ConfigManager 通过环境变量注入
         
         # 服务实例
         self.xiaomi_service: Optional[XiaomiService] = None
