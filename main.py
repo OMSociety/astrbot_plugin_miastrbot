@@ -5,7 +5,7 @@ miastrbot - AstrBot 小爱音箱+米家设备集成插件
 小爱音箱作为语音入口， AstrBot 作为大脑，米家设备作为执行终端
 
 作者: Slandre & Flandre
-版本: 0.0.9
+版本: 0.1.0
 """
 
 import os
