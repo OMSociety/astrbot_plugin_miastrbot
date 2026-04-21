@@ -6,9 +6,5 @@ help: |
   配置说明：请参考 config.yaml.example
 version: v0.1.0
 astrbot_version: ">=4.0.0"
-support_platforms:
-  - aiocqhttp
-  - qq_official
-  - gewechat
 author: Slandre & Flandre
 repo: https://github.com/OMSociety/astrbot_plugin_miastrbot
