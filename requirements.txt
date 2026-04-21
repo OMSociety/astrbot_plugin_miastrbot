@@ -1,7 +1,7 @@
 # 小爱服务
 aiohttp>=3.9.0
 httpx>=0.25.0
-miservice_fork>=1.0.0  # 小米服务SDK
+miservice-fork>=1.0.0  # 小米服务SDK
 
 # 米家服务 - 二维码授权
 mijiaAPI>=1.0.0
