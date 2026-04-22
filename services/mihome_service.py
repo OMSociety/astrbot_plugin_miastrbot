@@ -65,7 +65,7 @@ class MiHomeService:
     def __init__(self, config: Dict[str, Any], data_manager: MiAstrBotDataManager = None):
         self.config = config
         self.data_dir = config.get(
-            "data_dir", "/AstrBot/data/plugins/miastrbot/data"
+            "data_dir", "/AstrBot/data/plugins/astrbot_plugin_miastrbot/data"
         )
         self.data_manager = data_manager or MiAstrBotDataManager(self.data_dir)
         

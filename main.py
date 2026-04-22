@@ -44,7 +44,7 @@ class MiASTRBotPlugin(Star):
         self.context = context
         
         # 初始化日志
-        plugin_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         log_dir = os.path.join(plugin_dir, "logs")
         self.log = init_logging(log_dir=log_dir)
         self.log.info("插件初始化中...")
