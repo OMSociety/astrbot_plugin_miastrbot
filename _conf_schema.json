@@ -43,20 +43,51 @@
         }
     },
     "speaker": {
-        "description": "对话模式配置",
+        "description": "小爱音箱配置",
         "type": "object",
         "items": {
+            "user_id": {
+                "description": "小米账号 UserId",
+                "type": "string",
+                "default": "",
+                "hint": "从 micli cookie 获取，不是手机号/邮箱"
+            },
+            "service_token": {
+                "description": "Service Token",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true,
+                "hint": "从 micli cookie 获取，用于访问 api2.mina.mi.com"
+            },
+            "cookie": {
+                "description": "完整 Cookie",
+                "type": "string",
+                "default": "",
+                "hint": "完整 Cookie 字符串，格式: deviceId=xxx; serviceToken=xxx; userId=xxx。提供此项可自动解析上面两个字段"
+            },
+            "device_id": {
+                "description": "设备 DID",
+                "type": "string",
+                "default": "",
+                "hint": "留空自动选择第一个音箱设备"
+            },
+            "hardware": {
+                "description": "音箱型号",
+                "type": "string",
+                "default": "L05C",
+                "hint": "L05C(Play增强版) / LX06(Pro) / LX04 / X10A / L05B / L07A"
+            },
             "ai_mode": {
                 "description": "AI 对话模式",
                 "type": "bool",
                 "default": false,
-                "hint": "开启后私聊消息直接进 AI 意图识别；关闭则仅响应命令前缀"
+                "hint": "开启后私聊消息直接进 AI 意图识别"
             },
             "model": {
                 "description": "LLM 模型",
                 "type": "string",
                 "default": "gpt-4o-mini",
-                "hint": "用于意图识别和闲聊，建议用低价模型"
+                "hint": "用于意图识别和闲聊"
             },
             "command_prefix": {
                 "description": "命令前缀",

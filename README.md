@@ -159,6 +159,94 @@ astrbot_plugin_miastrbot/
 
 ---
 
+## 🔧 小爱音箱 Cookie 获取教程
+
+小爱音箱功能需要获取小米账号的 `serviceToken`，用于访问 `api2.mina.mi.com`。
+
+### 方法一：使用 miservice_fork（推荐）
+
+**步骤 1：安装 miservice_fork**
+
+```bash
+pip install miservice_fork
+```
+
+**步骤 2：获取 Cookie**
+
+在本地电脑（Windows/macOS/Linux）执行以下命令：
+
+```bash
+# 设置环境变量
+export MI_USER="你的小米账号"
+export MI_PASS="你的小米密码"
+
+# 获取 Cookie
+micli cookie
+```
+
+成功后会输出类似内容：
+
+```
+userId: 1234567890
+serviceToken: xxxxxxxx...
+deviceId: xxxxxxxx...
+```
+
+**步骤 3：复制配置**
+
+将获取到的 `userId`、`serviceToken`、`deviceId` 填入插件配置：
+
+```json
+{
+  "speaker": {
+    "user_id": "1234567890",
+    "service_token": "你的 serviceToken",
+    "device_id": "你的 deviceId（可选，自动选择第一个音箱）",
+    "hardware": "L05C"
+  }
+}
+```
+
+### 方法二：抓包获取
+
+**步骤 1：安装抓包工具**
+
+推荐使用 [HTTP Catcher](https://www.iplaysoft.com/httpcatcher.html)（iOS）或 [Charles Proxy](https://www.charlesproxy.com/)（全平台）。
+
+**步骤 2：配置代理**
+
+将手机代理指向抓包工具，开始录制。
+
+**步骤 3：获取 Cookie**
+
+1. 打开小米账号登录页面：`https://userprofile.mina.mi.com/device_profile/v2/conversation`
+2. 登录后，查看抓包记录
+3. 找到请求头中的 `Cookie` 字段
+4. Cookie 格式示例：
+   ```
+   deviceId=xxxx; serviceToken=xxxx; userId=xxxx
+   ```
+
+**步骤 4：解析 Cookie**
+
+如果拿到的是完整 Cookie 字符串，插件会自动解析。如果不是，需要分别提取：
+- `userId`
+- `serviceToken`
+- `deviceId`（可选）
+
+### 常见问题
+
+**Q: Cookie 过期了怎么办？**
+> 重新执行 `micli cookie` 或重新抓包获取新的 Cookie。
+
+**Q: 获取 Cookie 时提示「异地登录风险」**
+> 尝试更换网络环境（如切换 WiFi/移动网络），或在小爱音箱 App 中关闭「账号保护」。
+
+**Q: 怎么确认 Cookie 有效？**
+> 重启 AstrBot 后观察日志，如果显示「小爱音箱登录成功」则表示 Cookie 有效。
+
+---
+
 ## 🙏 致谢
 
 - [AstrBot](https://github.com/AstrBotDevs/AstrBot) — 优秀的 Bot 框架
