@@ -1,47 +1,4 @@
 {
-    "xiaomi": {
-        "description": "小爱音箱配置",
-        "type": "object",
-        "items": {
-            "account": {
-                "description": "小米账号",
-                "type": "string",
-                "default": "",
-                "hint": "邮箱或手机号，用于登录小爱音箱"
-            },
-            "xiaomi_id": {
-                "description": "小米数字 ID",
-                "type": "string",
-                "default": "",
-                "hint": "不是手机号/邮箱，可在小米账号「个人信息」-「小米 ID」查看"
-            },
-            "passtoken": {
-                "description": "PassToken",
-                "type": "string",
-                "default": "",
-                "obvious_hint": true,
-                "hint": "从 https://account.xiaomi.com/ 获取的 passtoken，格式：V1:xxx。用于绕过密码登录"
-            },
-            "password": {
-                "description": "密码",
-                "type": "string",
-                "default": "",
-                "obvious_hint": true
-            },
-            "device_id": {
-                "description": "设备 DID",
-                "type": "string",
-                "default": "",
-                "hint": "留空自动选择绑定列表第一个设备"
-            },
-            "hardware": {
-                "description": "音箱型号",
-                "type": "string",
-                "default": "L05C",
-                "hint": "L05C(Play增强版) / LX06(Pro) / LX04 / X10A / L05B"
-            }
-        }
-    },
     "speaker": {
         "description": "小爱音箱配置",
         "type": "object",
@@ -50,26 +7,26 @@
                 "description": "小米账号 UserId",
                 "type": "string",
                 "default": "",
-                "hint": "从 micli cookie 获取，不是手机号/邮箱"
+                "hint": "从 micli cookie 获取"
             },
             "service_token": {
                 "description": "Service Token",
                 "type": "string",
                 "default": "",
                 "obvious_hint": true,
-                "hint": "从 micli cookie 获取，用于访问 api2.mina.mi.com"
+                "hint": "从 micli cookie 获取"
             },
             "cookie": {
                 "description": "完整 Cookie",
                 "type": "string",
                 "default": "",
-                "hint": "完整 Cookie 字符串，格式: deviceId=xxx; serviceToken=xxx; userId=xxx。提供此项可自动解析上面两个字段"
+                "hint": "格式: deviceId=xxx; serviceToken=xxx; userId=xxx。提供此项可自动解析"
             },
             "device_id": {
                 "description": "设备 DID",
                 "type": "string",
                 "default": "",
-                "hint": "留空自动选择第一个音箱设备"
+                "hint": "留空自动选择第一个音箱"
             },
             "hardware": {
                 "description": "音箱型号",
@@ -96,6 +53,11 @@
                 "hint": "逗号分隔，带此前缀才当作命令处理"
             }
         }
+    },
+    "mihome": {
+        "description": "米家设备控制（扫码授权后自动生成配置）",
+        "type": "object",
+        "items": {}
     },
     "weather": {
         "description": "天气查询配置",
@@ -181,13 +143,12 @@
                 "description": "启用面板",
                 "type": "bool",
                 "default": true,
-                "hint": "关闭后可节省资源，命令操作不受影响"
+                "hint": "关闭后可节省资源"
             },
             "host": {
                 "description": "监听地址",
                 "type": "string",
-                "default": "127.0.0.1",
-                "hint": "建议使用 127.0.0.1 仅本地访问，0.0.0.0 表示所有网络接口（风险较高）"
+                "default": "127.0.0.1"
             },
             "port": {
                 "description": "端口",
@@ -203,8 +164,7 @@
             "auto_kill": {
                 "description": "端口冲突时自动清理",
                 "type": "bool",
-                "default": false,
-                "hint": "开启后启动时自动 kill 占用端口的旧进程"
+                "default": false
             }
         }
     }

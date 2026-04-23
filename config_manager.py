@@ -55,10 +55,11 @@ class MiASTRBotConfigManager:
     def _apply_env_overrides(self):
         """环境变量覆盖（最高优先级）"""
         env_mappings = {
-            "MIASTRBOT_XIAOMI_ACCOUNT": "xiaomi.account",
-            "MIASTRBOT_XIAOMI_PASSWORD": "xiaomi.password",
-            "MIASTRBOT_XIAOMI_DEVICE_ID": "xiaomi.device_id",
-            "MIASTRBOT_XIAOMI_HARDWARE": "xiaomi.hardware",
+            "MIASTRBOT_SPEAKER_USER_ID": "speaker.user_id",
+            "MIASTRBOT_SPEAKER_SERVICE_TOKEN": "speaker.service_token",
+            "MIASTRBOT_SPEAKER_DEVICE_ID": "speaker.device_id",
+            "MIASTRBOT_SPEAKER_HARDWARE": "speaker.hardware",
+            "MIASTRBOT_SPEAKER_MODEL": "speaker.model",
             "MIASTRBOT_WEATHER_API_KEY": "weather.weather_api_key",
             "MIASTRBOT_WEATHER_CITY": "weather.weather_city",
             "MIASTRBOT_TTS_TYPE": "tts.engine",
@@ -66,7 +67,6 @@ class MiASTRBotConfigManager:
             "MIASTRBOT_VOLCENGINE_APPID": "tts.volcengine_appid",
             "MIASTRBOT_VOLCENGINE_ACCESS_TOKEN": "tts.volcengine_access_token",
             "MIASTRBOT_VOLCENGINE_VOICE_TYPE": "tts.volcengine_voice_type",
-            "MIASTRBOT_SPEAKER_MODEL": "speaker.model",
         }
         import os
         for env_key, config_key in env_mappings.items():
