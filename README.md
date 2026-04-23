@@ -23,32 +23,39 @@
 
 ### 1. 小爱音箱配置
 
-#### 获取 Cookie（推荐方式）
+#### 获取 Cookie（必做）
 
-```bash
-# 安装 miservice_fork
-pip install miservice_fork
+1. 浏览器打开 `https://account.xiaomi.com/`
+2. 登录你的小米账号
+3. 按 **F12** 打开开发者工具 → **Network（网络）** 标签
+4. 刷新页面，找到任意一个请求
+5. 点击请求 → **Headers** → 找到 **Request Headers** 里的 `Cookie`
+6. 复制完整 Cookie 字符串
 
-# 获取 Cookie
-export MI_USER="你的小米账号"
-export MI_PASS="你的小米密码"
-micli cookie
-```
+#### 解析 Cookie
 
-复制输出的 `userId`、`serviceToken` 填入配置。
+从 Cookie 字符串中提取两个值：
+
+| 字段 | 来源 | 示例 |
+|------|------|------|
+| **user_id** | Cookie 中 `userId=xxx` | `0123456789` |
+| **service_token** | Cookie 中 `serviceToken=xxx` | `sjsjxxx...`（很长） |
 
 #### 插件配置
 
 ```json
 {
   "speaker": {
-    "user_id": "你的userId",
+    "user_id": "0123456789",
     "service_token": "你的serviceToken",
-    "device_id": "",
     "hardware": "L05C"
   }
 }
 ```
+
+> 💡 **如何区分 userId 和 serviceToken？**
+> - userId 通常以 0 开头，长度约 10 位
+> - serviceToken 很长（100+ 字符），是一串随机字符串
 
 ### 2. 米家设备授权
 
@@ -100,7 +107,7 @@ services/
 ## ⚠️ 常见问题
 
 **Q: 小爱音箱登录失败**
-> 请确保 Cookie 有效，参考上面的获取步骤。
+> 请确保 Cookie 有效，参考上面的获取步骤。Cookie 过期后需重新获取。
 
 **Q: 米家扫码失败**
 > 确保小米账号开启了"授权登录"权限。
