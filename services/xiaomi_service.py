@@ -137,7 +137,6 @@ class XiaomiService:
                     sid="micoapi"
                 )
                 if not success:
-                    await self._session.close()
                     raise XiaomiAuthError("passtoken 登录失败，请检查是否过期")
                 # MiNA 登录成功，继续登录 xiaomiio
                 try:
@@ -273,6 +272,11 @@ class XiaomiService:
             if not nonce:
                 logger.error(f"[miastrbot] passtoken 响应缺少 nonce: {resp}")
                 return False
+            
+            # URL 解码 nonce（如果包含编码字符）
+            from urllib.parse import unquote
+            if '%' in str(nonce):
+                nonce = unquote(str(nonce))
 
             # 计算 clientSign 并获取 serviceToken（使用官方实现方式）
             nsec = "nonce=" + str(nonce) + "&" + ssecurity
