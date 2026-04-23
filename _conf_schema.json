@@ -7,20 +7,14 @@
                 "description": "小米账号 UserId",
                 "type": "string",
                 "default": "",
-                "hint": "从 micli cookie 获取"
+                "hint": "从 Cookie 中提取，以 0 开头"
             },
             "service_token": {
                 "description": "Service Token",
                 "type": "string",
                 "default": "",
                 "obvious_hint": true,
-                "hint": "从 micli cookie 获取"
-            },
-            "cookie": {
-                "description": "完整 Cookie",
-                "type": "string",
-                "default": "",
-                "hint": "格式: deviceId=xxx; serviceToken=xxx; userId=xxx。提供此项可自动解析"
+                "hint": "从 Cookie 中提取，很长的一串字符"
             },
             "device_id": {
                 "description": "设备 DID",
