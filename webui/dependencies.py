@@ -31,7 +31,7 @@ class Container:
     依赖注入容器
     """
     config_manager: Optional[MiASTRBotConfigManager] = None
-    xiaomi_service: Optional[object] = None
+    speaker_service: Optional[object] = None  # 小爱音箱服务
     mihome_service: Optional[MiHomeService] = None
     agent_handler: Optional[AgentHandler] = None
     webui_config: WebUIConfig = field(default_factory=WebUIConfig)
@@ -41,7 +41,7 @@ _container: Optional[Container] = None
 
 def init_container(
     config_manager=None,
-    xiaomi_service=None,
+    speaker_service=None,
     mihome_service=None,
     agent_handler=None,
     webui_config=None,
@@ -53,7 +53,7 @@ def init_container(
     global _container
     _container = Container(
         config_manager=config_manager,
-        xiaomi_service=xiaomi_service,
+        speaker_service=speaker_service,
         mihome_service=mihome_service,
         agent_handler=agent_handler,
         webui_config=webui_config or WebUIConfig(),

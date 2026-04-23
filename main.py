@@ -18,7 +18,7 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api import logger as astrbot_logger
 
 from .config_manager import MiASTRBotConfigManager
-from .services.xiaomi_service import XiaomiService, XiaomiAuthError, XiaomiCommandError
+from .services.xiaomi_speaker_service import XiaomiSpeakerService, XiaomiSpeakerError, XiaomiSpeakerAuthError
 from .services.mihome_service import MiHomeService, MiHomeAuthError, MiHomeControlError
 from .services.tts_service import TTSServer, TTSServerError
 from .agent.handler import AgentHandler
@@ -34,7 +34,7 @@ from .utils.exceptions import (
 PLUGIN_NAME = "astrbot_plugin_miastrbot"
 
 
-@register(PLUGIN_NAME, "Slandre & Flandre", "小爱Agent", "0.0.9")
+@register(PLUGIN_NAME, "Slandre & Flandre", "小爱Agent", "0.1.0")
 class MiASTRBotPlugin(Star):
     """miastrbot 插件主类"""
     
@@ -51,10 +51,8 @@ class MiASTRBotPlugin(Star):
         # 初始化配置管理器
         self.config_manager = MiASTRBotConfigManager(config)
         
-        # 敏感信息由 ConfigManager 通过环境变量注入
-        
         # 服务实例
-        self.xiaomi_service: Optional[XiaomiService] = None
+        self.speaker_service: Optional[XiaomiSpeakerService] = None
         self.mihome_service: Optional[MiHomeService] = None
         self.tts_server: Optional[TTSServer] = None
         self.agent_handler: Optional[AgentHandler] = None
@@ -71,7 +69,7 @@ class MiASTRBotPlugin(Star):
     async def initialize(self):
         await super().initialize()
         
-        # 先初始化服务（包括 mihome_service），再启动 WebUI
+        # 初始化服务
         try:
             await self._init_services()
             self._running = True
@@ -86,17 +84,17 @@ class MiASTRBotPlugin(Star):
             self.log.info("WebUI 已禁用")
             return
         
-        # 初始化 WebUI 配置（必须在 init_container 之前定义）
+        # 初始化 WebUI 配置
         webui_config = WebUIConfig(
             host=self.config_manager.get("webui.host", "0.0.0.0"),
             port=self.config_manager.get("webui.port", 9528),
             password=self.config_manager.get("webui.password", "")
         )
         
-        # 初始化容器（必须在 webui_config 定义之后）
+        # 初始化容器
         init_container(
             config_manager=self.config_manager,
-            xiaomi_service=self.xiaomi_service,
+            speaker_service=self.speaker_service,
             mihome_service=self.mihome_service,
             agent_handler=self.agent_handler,
             webui_config=webui_config,
@@ -118,10 +116,13 @@ class MiASTRBotPlugin(Star):
             self.log.error(traceback.format_exc())
 
     async def terminate(self):
-        """
-        插件被禁用时调用
-        """
+        """插件被禁用时调用"""
         self._running = False
+        
+        # 停止小爱音箱轮询
+        if self.speaker_service:
+            self.speaker_service.stop_polling()
+            await self.speaker_service.close()
         
         # 停止 WebUI 服务器
         if self._webui_server:
@@ -140,21 +141,23 @@ class MiASTRBotPlugin(Star):
         except Exception as e:
             self.log.error(f"TTS 服务初始化失败: {e}")
         
-        # 初始化小爱服务
+        # 初始化小爱音箱服务
         try:
-            xiaomi_config = self.config_manager.get_section("xiaomi")
-            self.xiaomi_service = XiaomiService(config=xiaomi_config)
+            speaker_config = self.config_manager.get_section("speaker")
+            self.speaker_service = XiaomiSpeakerService(config=speaker_config)
             
-            if xiaomi_config.get("account") and xiaomi_config.get("password"):
-                await self._login_xiaomi()
+            # 如果有 Cookie/Token，尝试登录
+            if self.speaker_service.is_logged_in:
+                await self._login_speaker()
+            else:
+                self.log.info("小爱音箱未配置 Cookie，请参考 README 获取")
         except Exception as e:
-            self.log.error(f"小爱服务初始化失败: {e}")
+            self.log.error(f"小爱音箱服务初始化失败: {e}")
         
         # 初始化米家服务
         try:
             mihome_config = self.config_manager.get_section("mihome")
             self.mihome_service = MiHomeService(config=mihome_config)
-            
             self.log.info("米家服务初始化完成")
         except Exception as e:
             self.log.error(f"米家服务初始化失败: {e}")
@@ -169,7 +172,7 @@ class MiASTRBotPlugin(Star):
                 "weather_city": weather_config.get("weather_city", "北京"),
             }
             self.agent_handler = AgentHandler(
-                xiaomi_service=self.xiaomi_service,
+                speaker_service=self.speaker_service,
                 mihome_service=self.mihome_service,
                 tts_server=self.tts_server,
                 config=agent_config,
@@ -179,18 +182,49 @@ class MiASTRBotPlugin(Star):
         except Exception as e:
             self.log.error(f"Agent Handler 初始化失败: {e}")
         
+        # 启动小爱音箱语音轮询
+        if self.speaker_service and self.speaker_service.is_logged_in:
+            asyncio.create_task(self._run_speaker_polling())
 
-    async def _login_xiaomi(self) -> bool:
+    async def _run_speaker_polling(self):
+        """运行小爱音箱语音轮询"""
+        self.log.info("启动小爱音箱语音轮询...")
+        
+        try:
+            async for command in self.speaker_service.poll_voice(keywords=["请", "帮我"]):
+                query = command.get("query", "")
+                self.log.info(f"收到语音命令: {query}")
+                
+                # 处理语音命令
+                if self.agent_handler:
+                    try:
+                        response = await self.agent_handler.process(query)
+                        if response:
+                            result = response.get("result") if isinstance(response, dict) else str(response)
+                            if result:
+                                await self.speaker_service.speak(result)
+                    except Exception as e:
+                        self.log.error(f"处理语音命令失败: {e}")
+                        await self.speaker_service.speak("处理命令失败，请稍后重试")
+                        
+        except asyncio.CancelledError:
+            self.log.info("小爱音箱语音轮询已停止")
+        except Exception as e:
+            self.log.error(f"语音轮询异常: {e}")
+    
+    async def _login_speaker(self) -> bool:
         """登录小爱音箱"""
-        if not self.xiaomi_service:
+        if not self.speaker_service:
             return False
         
         try:
-            success = await self.xiaomi_service.login()
+            success = await self.speaker_service.login()
             if success:
                 self.log.info("小爱音箱登录成功")
+                # 登录成功后启动轮询
+                asyncio.create_task(self._run_speaker_polling())
             return success
-        except XiaomiAuthError as e:
+        except XiaomiSpeakerAuthError as e:
             self.log.error(f"小爱音箱登录失败: {e}")
             return False
     
@@ -261,20 +295,20 @@ class MiASTRBotPlugin(Star):
     
     async def speak_to_xiaomi(self, text: str) -> str:
         """通过小爱音箱播报"""
-        if not self.xiaomi_service:
-            return "小爱服务未初始化"
+        if not self.speaker_service:
+            return "小爱音箱服务未初始化"
         
         try:
-            result = await self.xiaomi_service.send_tts(text)
-            return result
-        except XiaomiCommandError as e:
-            return f"播报失败: {e}"
+            success = await self.speaker_service.speak(text)
+            return "✅ 播报成功" if success else "❌ 播报失败"
+        except Exception as e:
+            return f"❌ 播报失败: {e}"
     
     @filter.event_message_type(filter.EventMessageType.PRIVATE_MESSAGE)
     async def on_message(self, event: AstrMessageEvent):
         """
         处理接收到的消息
-        仅处理私聊消息（不监听 QQ 群聊）
+        仅处理私聊消息
         """
         if not event.message_str:
             return
@@ -359,24 +393,24 @@ class MiASTRBotPlugin(Star):
 「控制 <设备别名> <动作>」 - 控制设备
 「播报 <内容>」 - 通过小爱音箱播报
 
-或者直接发送消息与小爱对话（需开启AI模式）
+直接发送消息与小爱对话，或对小爱音箱说"请xxx"触发语音命令
         """.strip()
         await event.send(MessageChain([Plain(help_text)]))
     
     async def _send_status(self, event: AstrMessageEvent, _args: str):
         """发送状态信息"""
-        xiaomi_logged_in = False
-        if self.xiaomi_service:
-            is_logged_in = getattr(self.xiaomi_service, "is_logged_in", False)
-            xiaomi_logged_in = is_logged_in() if callable(is_logged_in) else bool(is_logged_in)
-        xiaomi_status = "✅ 已连接" if xiaomi_logged_in else "❌ 未连接"
+        speaker_logged_in = False
+        if self.speaker_service:
+            is_logged_in = getattr(self.speaker_service, "is_logged_in", False)
+            speaker_logged_in = is_logged_in() if callable(is_logged_in) else bool(is_logged_in)
+        speaker_status = "✅ 已连接" if speaker_logged_in else "❌ 未连接"
         mihome_status = "✅ 已连接" if self.mihome_service and self.mihome_service.is_authenticated() else "❌ 未连接"
         tts_status = "✅ 就绪" if self.tts_server else "❌ 未就绪"
         agent_status = "✅ 就绪" if self.agent_handler else "❌ 未就绪"
         
         status_text = f"""
 服务状态:
-├─ 小爱音箱: {xiaomi_status}
+├─ 小爱音箱: {speaker_status}
 ├─ 米家: {mihome_status}
 ├─ TTS: {tts_status}
 └─ Agent: {agent_status}
@@ -389,8 +423,8 @@ class MiASTRBotPlugin(Star):
         await event.send(MessageChain([Plain("正在登录...")]))
         
         tasks = []
-        if self.xiaomi_service:
-            tasks.append(self._login_xiaomi())
+        if self.speaker_service:
+            tasks.append(self._login_speaker())
         if self.mihome_service:
             tasks.append(self._login_mihome())
         

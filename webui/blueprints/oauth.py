@@ -256,16 +256,16 @@ async def get_auth_status():
     """获取当前授权状态"""
     container = get_container()
     
-    xiaomi_ok = False
+    speaker_ok = False
     mihome_ok = False
     mihome_status = {}
     
     if container:
-        if container.xiaomi_service:
+        if container.speaker_service:
             try:
-                xiaomi_ok = container.xiaomi_service._logged_in
+                speaker_ok = container.speaker_service.is_logged_in
             except:
-                xiaomi_ok = False
+                speaker_ok = False
         
         if container.mihome_service:
             try:
@@ -275,7 +275,7 @@ async def get_auth_status():
                 mihome_ok = False
     
     return {
-        "xiaomi": xiaomi_ok,
+        "speaker": speaker_ok,
         "mihome": mihome_ok,
         "mihome_detail": mihome_status,
     }
@@ -287,9 +287,9 @@ async def logout():
     container = get_container()
     
     if container:
-        if container.xiaomi_service:
+        if container.speaker_service:
             try:
-                container.xiaomi_service._logged_in = False
+                container.speaker_service.stop_polling()
             except:
                 pass
         if container.mihome_service:

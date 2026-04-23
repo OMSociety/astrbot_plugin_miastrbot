@@ -46,19 +46,19 @@ class AgentHandler:
     4. 返回 {intent, result, tts_text} 统一格式
     """
     
-    def __init__(self, xiaomi_service=None, mihome_service=None, tts_server=None, config: Dict[str, Any] = None, context=None):
+    def __init__(self, speaker_service=None, mihome_service=None, tts_server=None, config: Dict[str, Any] = None, context=None):
         """
         初始化 Agent 处理器
         
         Args:
-            xiaomi_service: 小爱服务实例
+            speaker_service: 小爱音箱服务实例
             mihome_service: 米家服务实例
             tts_server: TTS 服务实例
             config: 配置字典（包含 model, weather_api_key, weather_city）
             context: AstrBot Context，用于调用 LLM
         """
         self.config = config or {}
-        self.xiaomi_service = xiaomi_service
+        self.speaker_service = speaker_service
         self.mihome_service = mihome_service
         self.tts_server = tts_server
         self.context = context
@@ -496,12 +496,12 @@ class AgentHandler:
         Returns:
             是否成功
         """
-        if not self.xiaomi_service:
-            logger.warning("[miastrbot] 小爱服务未初始化")
+        if not self.speaker_service:
+            logger.warning("[miastrbot] 小爱音箱服务未初始化")
             return False
         
         try:
-            await self.xiaomi_service.send_tts(text)
+            await self.speaker_service.speak(text)
             return True
         except Exception as e:
             logger.error(f"[miastrbot] TTS播放失败: {e}")
