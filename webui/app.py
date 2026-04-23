@@ -3,6 +3,7 @@
 FastAPI 应用工厂
 """
 import os
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, HTMLResponse, FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -11,6 +12,17 @@ from .blueprints import auth, devices, config, oauth
 
 # Session 管理从 dependencies 导入
 from .dependencies import is_authenticated
+
+
+def _safe_static_file(base_dir: str, requested_path: str) -> Path:
+    """安全解析静态文件路径，防止路径穿越。"""
+    base = Path(base_dir).resolve()
+    candidate = (base / requested_path).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError:
+        return None
+    return candidate
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -96,9 +108,9 @@ def create_app(webui_config=None):
     @app.get("/miastrbot/static/{path:path}")
     async def static_files(path: str):
         """静态文件服务"""
-        file_path = os.path.join(static_dir, path)
-        if os.path.exists(file_path):
-            return FileResponse(file_path)
+        file_path = _safe_static_file(static_dir, path)
+        if file_path and file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
         return HTMLResponse(content="File not found", status_code=404)
     
     @app.get("/health")

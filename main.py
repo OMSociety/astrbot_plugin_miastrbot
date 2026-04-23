@@ -15,7 +15,6 @@ from typing import Optional
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.core.message.components import Plain
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger as astrbot_logger
 
 from .config_manager import MiASTRBotConfigManager
 from .services.xiaomi_service import XiaomiService, XiaomiAuthError, XiaomiCommandError
@@ -24,18 +23,12 @@ from .services.tts_service import TTSServer, TTSServerError
 from .agent.handler import AgentHandler
 from .webui import init_container, Server
 from .webui.config import WebUIConfig
-from .utils.events import EventManager
 from .utils.logging import init_logging
-from .utils.exceptions import (
-    MiASTRBotError,
-    MiASTRBotConfigError,
-    MiASTRBotServiceError,
-)
 
 PLUGIN_NAME = "astrbot_plugin_miastrbot"
 
 
-@register(PLUGIN_NAME, "Slandre & Flandre", "小爱Agent", "0.0.9")
+@register(PLUGIN_NAME, "Slandre & Flandre", "小爱Agent", "0.1.0")
 class MiASTRBotPlugin(Star):
     """miastrbot 插件主类"""
     
@@ -89,7 +82,7 @@ class MiASTRBotPlugin(Star):
         
         # 初始化 WebUI 配置（必须在 init_container 之前定义）
         webui_config = WebUIConfig(
-            host=self.config_manager.get("webui.host", "0.0.0.0"),
+            host=self.config_manager.get("webui.host", "127.0.0.1"),
             port=self.config_manager.get("webui.port", 9528),
             password=self.config_manager.get("webui.password", "")
         )
@@ -101,6 +94,7 @@ class MiASTRBotPlugin(Star):
             mihome_service=self.mihome_service,
             agent_handler=self.agent_handler,
             webui_config=webui_config,
+            tts_server=self.tts_server,
         )
         
         try:
@@ -245,7 +239,9 @@ class MiASTRBotPlugin(Star):
         
         try:
             result = await self.mihome_service.control_device(device_alias, action)
-            return result
+            if isinstance(result, dict):
+                return result.get("message", str(result))
+            return str(result)
         except MiHomeControlError as e:
             return f"控制设备失败: {e}"
     

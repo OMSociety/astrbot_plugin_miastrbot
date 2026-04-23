@@ -10,18 +10,13 @@ Agent指令处理器 (AgentHandler)
 5. TTS 格式化
 """
 
-import json
 import re
-import asyncio
 from typing import Dict, Any, Optional, List
 
 from astrbot.api import logger
 
 from .prompts import (
-    SYSTEM_PROMPT,
     INTENT_PROMPT,
-    DEVICE_CONTROL_PROMPT,
-    CHAT_PROMPT,
 )
 
 
@@ -152,8 +147,6 @@ class AgentHandler:
         适合关键词难以判断的模糊场景
         """
         try:
-            import aiohttp
-            
             # 从 mihome_service 获取设备名作为上下文
             devices_context = ""
             if self.mihome_service:
@@ -168,11 +161,26 @@ class AgentHandler:
             )
             
             if self.context:
-                resp = await self.context.llm_generate(prompt=f"你是意图识别器。用户说：{text}\n{devices_context}\n只输出意图类型：DEVICE_CONTROL / DEVICE_QUERY / CHAT / WEATHER_QUERY / TIME_QUERY / UNKNOWN")
+                resp = await self.context.llm_generate(
+                    prompt=(
+                        f"{prompt}\n\n"
+                        "只输出意图类型（不解释）："
+                        "DEVICE_CONTROL / DEVICE_QUERY / CHAT / WEATHER_QUERY / TIME_QUERY / UNKNOWN"
+                    )
+                )
                 result = (resp.completion_text or resp.text or "").strip().upper()
-                for itype in IntentType:
-                    if itype.value.upper().replace("_", "") in result.replace("_", ""):
-                        return itype
+                intent_map = {
+                    "DEVICE_CONTROL": IntentType.DEVICE_CONTROL,
+                    "DEVICE_QUERY": IntentType.DEVICE_QUERY,
+                    "WEATHER_QUERY": IntentType.WEATHER_QUERY,
+                    "TIME_QUERY": IntentType.TIME_QUERY,
+                    "CHAT": IntentType.CHAT,
+                    "UNKNOWN": IntentType.UNKNOWN,
+                }
+                normalized = result.replace("-", "_").replace(" ", "_")
+                for key, intent in intent_map.items():
+                    if key in normalized:
+                        return intent
                 logger.debug(f"[miastrbot] LLM意图结果: {result}，fallback关键词判断")
             else:
                 logger.warning("[miastrbot] 无 context，无法使用 LLM 意图识别")
@@ -182,6 +190,12 @@ class AgentHandler:
             if any(kw in text for kw in ["开", "关", "打开", "启动"]):
                 return IntentType.DEVICE_CONTROL
             return IntentType.DEVICE_QUERY
+        
+        if any(kw in text for kw in ["开", "关", "打开", "启动"]):
+            return IntentType.DEVICE_CONTROL
+        if any(kw in text for kw in ["状态", "查询", "开着吗", "关着吗"]):
+            return IntentType.DEVICE_QUERY
+        return IntentType.CHAT
     
     async def _handle_device_control(self, text: str) -> Dict[str, Any]:
         """
