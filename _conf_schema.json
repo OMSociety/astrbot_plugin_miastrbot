@@ -78,7 +78,7 @@
                 "description": "TTS 引擎",
                 "type": "string",
                 "default": "edge",
-                "hint": "edge（免费，推荐）/ openai / azure / native / volcengine"
+                "hint": "edge（免费，推荐）/ openai / native / volcengine"
             },
             "voice": {
                 "description": "语音角色",
