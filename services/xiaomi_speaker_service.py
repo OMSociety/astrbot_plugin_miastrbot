@@ -4,14 +4,12 @@
 
 基于 Cookie 认证的小爱音箱控制服务。
 
-工作原理（参考 xiaogpt 项目）:
+工作原理:
 1. 轮询小爱音箱状态，获取用户语音命令
 2. 将语音命令发送给 AI 处理
 3. AI 回答通过 TTS 播报回小爱音箱
 
-用户需要提供 Cookie 信息，可通过以下方式获取：
-1. 使用 miservice_fork: `micli list` 自动获取
-2. 抓包获取: 访问 https://userprofile.mina.mi.com/device_profile/v2/conversation
+用户需要提供 Cookie 信息（从 account.xiaomi.com 登录后 F12 获取）。
 
 参考: https://github.com/yihong0618/xiaogpt
 """
@@ -22,7 +20,6 @@ import logging
 import os
 import time
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse, parse_qs
 
 import aiohttp
 
@@ -65,11 +62,9 @@ class XiaomiSpeakerService:
     
     配置项:
         hardware: 设备型号（小爱音箱屁股上的型号，如 L05C、LX06）
-        device_id: 设备 DID（可从 miservice_fork 的 micli list 获取）
-        cookie: Cookie 字符串（格式: deviceId=xxx; serviceToken=xxx; userId=xxx）
-        user_id: 小米账号 userId
-        service_token: micoapi serviceToken
-        device_id: 小爱音箱设备 ID
+        device_id: 设备 DID（可留空自动选择）
+        user_id: 小米账号 userId（从 Cookie 中提取）
+        service_token: micoapi serviceToken（从 Cookie 中提取）
     
     使用方式:
         1. 初始化: service = XiaomiSpeakerService(config)
@@ -90,14 +85,9 @@ class XiaomiSpeakerService:
         self.hardware = config.get("hardware", "L05C")
         self.device_id = config.get("device_id", "") or os.getenv("MI_DID", "")
         
-        # Cookie 配置
+        # Cookie 配置（从 account.xiaomi.com F12 获取）
         self.user_id = config.get("user_id", "")
         self.service_token = config.get("service_token", "")
-        self.cookie = config.get("cookie", "")
-        
-        # 如果提供了完整 cookie，解析出各个字段
-        if self.cookie and not (self.user_id and self.service_token):
-            self._parse_cookie(self.cookie)
         
         # Token 文件路径
         self.token_path = os.path.join(self.data_dir, "speaker_token.json")
@@ -113,21 +103,6 @@ class XiaomiSpeakerService:
         self.ai_handler = None
         
         logger.info(f"[miastrbot] 小爱音箱服务初始化，型号: {self.hardware}")
-    
-    def _parse_cookie(self, cookie: str):
-        """解析 Cookie 字符串"""
-        for part in cookie.split(";"):
-            part = part.strip()
-            if "=" in part:
-                key, value = part.split("=", 1)
-                key = key.strip()
-                if key == "userId":
-                    self.user_id = value.strip()
-                elif key == "serviceToken":
-                    self.service_token = value.strip()
-                elif key == "deviceId":
-                    if not self.device_id:
-                        self.device_id = value.strip()
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """获取或创建 session"""
@@ -168,7 +143,7 @@ class XiaomiSpeakerService:
         """
         if not (self.user_id and self.service_token):
             raise XiaomiSpeakerAuthError(
-                "未配置 Cookie，请提供 user_id、service_token 或完整 cookie"
+                "未配置 user_id 和 service_token，请从 Cookie 中提取这两个值"
             )
         
         # 测试 API 调用
@@ -464,30 +439,3 @@ class XiaomiSpeakerService:
     def is_logged_in(self) -> bool:
         """检查是否已登录"""
         return bool(self.user_id and self.service_token)
-    
-    def gen_auth_url(self) -> str:
-        """
-        生成授权 URL（用于获取 Cookie）
-        
-        Returns:
-            授权页面 URL
-        """
-        return "https://userprofile.mina.mi.com/device_profile/v2/conversation"
-    
-    @staticmethod
-    def get_cookie_from_miservice() -> Dict[str, str]:
-        """
-        从 miservice_fork 获取 Cookie（需要在本地运行）
-        
-        用户需要先安装 miservice_fork，然后运行:
-            micli list
-        
-        Returns:
-            包含 userId, serviceToken, deviceId 的字典
-        """
-        # 这是一个示例，实际需要用户手动操作
-        return {
-            "userId": "从 micli list 输出中复制",
-            "serviceToken": "从 micli list 输出中复制",
-            "deviceId": "从 micli list 输出中复制",
-        }
