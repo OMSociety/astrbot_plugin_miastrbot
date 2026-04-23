@@ -24,7 +24,6 @@ from .services.tts_service import TTSServer, TTSServerError
 from .agent.handler import AgentHandler
 from .webui import init_container, Server
 from .webui.config import WebUIConfig
-from .utils.events import EventManager
 from .utils.logging import init_logging
 from .utils.exceptions import (
     MiASTRBotError,

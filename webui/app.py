@@ -95,10 +95,14 @@ def create_app(webui_config=None):
     
     @app.get("/miastrbot/static/{path:path}")
     async def static_files(path: str):
-        """静态文件服务"""
-        file_path = os.path.join(static_dir, path)
-        if os.path.exists(file_path):
-            return FileResponse(file_path)
+        """静态文件服务（路径穿越防护）"""
+        # 路径规范化，防止 ../ 穿越
+        resolved = os.path.normpath(os.path.join(static_dir, path))
+        # 确保路径在 static_dir 内
+        if not resolved.startswith(os.path.normpath(static_dir) + os.sep) and resolved != os.path.normpath(static_dir):
+            return HTMLResponse(content="Forbidden", status_code=403)
+        if os.path.isfile(resolved):
+            return FileResponse(resolved)
         return HTMLResponse(content="File not found", status_code=404)
     
     @app.get("/health")

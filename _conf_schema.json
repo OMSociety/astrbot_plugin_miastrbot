@@ -155,12 +155,13 @@
             "host": {
                 "description": "监听地址",
                 "type": "string",
-                "default": "0.0.0.0"
+                "default": "127.0.0.1",
+                "hint": "建议使用 127.0.0.1 仅本地访问，0.0.0.0 表示所有网络接口（风险较高）"
             },
             "port": {
                 "description": "端口",
                 "type": "int",
-                "default": 9528
+                "default": 9527
             },
             "password": {
                 "description": "访问密码",

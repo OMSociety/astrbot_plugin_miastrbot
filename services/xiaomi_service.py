@@ -6,9 +6,15 @@
 参考: https://github.com/yihong0618/xiaogpt
 """
 
+import base64
+import hashlib
+import json
+import re
 import os
 import asyncio
 from typing import Optional, List, Dict, Any, Callable
+from urllib.parse import parse_qs, urlparse
+
 from astrbot.api import logger
 
 # 尝试导入 miservice (适配 miservice_fork)
@@ -182,70 +188,112 @@ class XiaomiService:
     async def _passtoken_login(self, passtoken: str, user_id: str, sid: str) -> bool:
         """
         使用 passtoken 登录（参考 migpt-next 的实现）
-
-        Args:
-            passtoken: 小米账号的预授权 token
-            user_id: 小米数字 ID
-            sid: 服务 ID（micoapi / xiaomiio）
-
-        Returns:
-            登录是否成功
+        
+        passtoken 直接写入 cookie，跳过 serviceLoginAuth2，
+        服务端直接返回 location（含 ssecurity）用于获取 serviceToken
         """
-        from miservice.miaccount import get_random
+        import base64, hashlib
+        from urllib.parse import parse_qs, urlparse, quote
 
-        # 创建 MiAccount 实例（复用 self._session，不创建在 with 块内）
-        self._account = MiAccount(
-            self._session, user_id, "",
-            os.path.join(os.path.expanduser("~"), ".mi.token")
-        )
-
-        # 初始化 token
-        if not self._account.token:
+        # 创建/复用 MiAccount
+        if not self._account:
+            from miservice.miaccount import get_random
+            self._account = MiAccount(
+                self._session, user_id, "",
+                os.path.join(os.path.expanduser("~"), ".mi.token")
+            )
             self._account.token = {"deviceId": get_random(16).upper()}
+        
         self._account.token["userId"] = user_id
         self._account.token["passToken"] = passtoken
 
-        # 调用 serviceLogin
-        self._account.now_ua = self._account.ua.random
+        # 调用 serviceLogin（passtoken 直接写 cookie，响应会直接返回 location）
+        # 使用 miservice 官方 User-Agent
+        ua = "Mistube/2.0.0 (Android 12; Scale/2.625)"
         cookies = {
             "userId": user_id,
             "passToken": passtoken,
             "deviceId": self._account.token.get("deviceId")
         }
-        headers = {"User-Agent": self._account.now_ua}
-        url = "https://account.xiaomi.com/pass/serviceLogin?sid=" + sid + "&_json=true"
+        headers = {"User-Agent": ua}
+        url = f"https://account.xiaomi.com/pass/serviceLogin?sid={sid}&_json=true&_locale=zh_CN"
 
-        async with self._session.request(
-            "GET", url, cookies=cookies, headers=headers, ssl=False
-        ) as r:
-            import json
+        async with self._session.get(url, cookies=cookies, headers=headers, ssl=False) as r:
             raw = await r.read()
             resp = json.loads(raw[11:])  # 去掉前缀
+            logger.debug(f"[miastrbot] serviceLogin 响应: code={resp.get('code')}, has_location=({'location' in resp})")
 
         if resp.get("code") != 0:
             logger.error(f"[miastrbot] passtoken serviceLogin 失败: {resp}")
             return False
 
-        # 获取 serviceToken
-        location = resp.get("location")
-        nonce = resp.get("nonce")
-        ssecurity = resp.get("ssecurity")
-
-        if not location or not nonce or not ssecurity:
-            logger.error(f"[miastrbot] passtoken 响应缺少必要字段: {resp}")
+        # 检查是否需要验证码
+        notification_url = resp.get("notificationUrl", "")
+        if notification_url and "identity/authStart" in notification_url:
+            logger.error(f"[miastrbot] passtoken 需要验证码，请重新获取")
             return False
 
-        # 获取 serviceToken
-        import base64, hashlib
-        from urllib import parse
-        nsec = f"nonce={nonce}&{ssecurity}"
+        # 从响应提取 location + ssecurity
+        location = resp.get("location")
+        # ssecurity 可能是 psecurity
+        ssecurity = resp.get("ssecurity") or resp.get("psecurity")
+        
+        logger.debug(f"[miastrbot] 提取: location={str(location)[:80]}, ssecurity={'有' if ssecurity else '无'}")
+
+        # 如果 location 里嵌入了 nonce，需要解析
+        if location and not ssecurity:
+            parsed = urlparse(location)
+            params = parse_qs(parsed.query)
+            # 从 auth 参数解码 ssecurity（base64）
+            auth = params.get("auth", [""])[0]
+            if auth:
+                try:
+                    ssecurity = base64.b64decode(auth).decode().split("_")[0]
+                except Exception:
+                    pass
+            # nonce 在 URL 里
+            nonce_str = parsed.query.split("nonce=")[1].split("&")[0] if "nonce=" in parsed.query else None
+
+        if not location or not ssecurity:
+            logger.error(f"[miastrbot] passtoken 响应缺少 location/ssecurity: {resp}")
+            return False
+
+        # 从 location 提取 nonce
+        if "nonce=" in location:
+            nonce = location.split("nonce=")[1].split("&")[0]
+        else:
+            nonce = resp.get("nonce", "")
+
+        if not nonce:
+            logger.error(f"[miastrbot] passtoken 响应缺少 nonce: {resp}")
+            return False
+
+                # 计算 clientSign 并获取 serviceToken（使用官方实现方式）
+        nsec = "nonce=" + str(nonce) + "&" + ssecurity
         clientSign = base64.b64encode(hashlib.sha1(nsec.encode()).digest()).decode()
-        async with self._session.get(
-            location + "&clientSign=" + parse.quote(clientSign)
-        ) as r:
-            serviceToken = r.cookies.get("serviceToken")
-            if serviceToken:
-                serviceToken = serviceToken.value
+        
+        logger.debug(f"[miastrbot] 完整 location: {location}")
+        logger.debug(f"[miastrbot] 完整 ssecurity: {ssecurity[:20]}..." if ssecurity else "[miastrbot] ssecurity: 无")
+        logger.debug(f"[miastrbot] 计算 clientSign: nsec={nsec[:30]}...")
+        
+        # 官方方式：不传 cookies，只加 clientSign
+        from urllib.parse import quote as urlquote
+        login_url = location + "&clientSign=" + urlquote(clientSign)
+        logger.debug(f"[miastrbot] 登录请求 URL: {login_url[:150]}...")
+        
+        async with self._session.get(login_url, ssl=False) as r:
+            logger.debug(f"[miastrbot] 登录响应状态: {r.status}")
+            logger.debug(f"[miastrbot] 登录响应 headers: {dict(r.headers)}")
+            serviceToken_cookie = r.cookies.get("serviceToken")
+            if serviceToken_cookie:
+                serviceToken = serviceToken_cookie.value
+                logger.debug(f"[miastrbot] 从 cookie 获取 serviceToken 成功")
+            else:
+                # 尝试从 set-cookie header 解析
+                set_cookie = str(r.headers.get("Set-Cookie", ""))
+                match = re.search(r'serviceToken=([^;]+)', set_cookie)
+                serviceToken = match.group(1) if match else None
+
             if not serviceToken:
                 logger.error(f"[miastrbot] passtoken 未获取到 serviceToken")
                 return False

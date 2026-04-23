@@ -125,13 +125,18 @@ class MiASTRBotConfigManager:
         
         keys = key.split(".")
         target = self._cache
+        raw_target = self._raw_config
         
+        # 同步更新 _raw_config
         for k in keys[:-1]:
             if k not in target:
                 target[k] = {}
+                raw_target[k] = {}
             target = target[k]
+            raw_target = raw_target[k]
         
         target[keys[-1]] = value
+        raw_target[keys[-1]] = value
     
     def get_section(self, section: str) -> Dict[str, Any]:
         """

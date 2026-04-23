@@ -275,7 +275,7 @@ class XiaomiEventListener:
                 
                 # 获取音箱状态
                 try:
-                    status = await self.xiaomi_service._ot_service.player_get_status(
+                    status = await self.xiaomi_service._na_service.player_get_status(
                         self.xiaomi_service.device_id
                     )
                     
