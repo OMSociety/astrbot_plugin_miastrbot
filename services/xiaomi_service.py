@@ -141,9 +141,18 @@ class XiaomiService:
                 os.path.join(os.path.expanduser("~"), ".mi.token")
             )
             
-            # 登录 micoapi
+            # 登录 micoapi（启用详细日志）
+            import logging
+            miservice_logger = logging.getLogger("miservice")
+            old_level = miservice_logger.level
+            miservice_logger.setLevel(logging.DEBUG)
+            
             success = await self._account.login("micoapi")
+            
+            miservice_logger.setLevel(old_level)
+            
             if not success:
+                logger.error(f"[miastrbot] 登录失败，token: {self._account.token}")
                 raise XiaomiAuthError("小米账号登录失败，请检查账号密码是否正确")
             
             # 登录 xiaomiio
