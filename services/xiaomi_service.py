@@ -1,29 +1,30 @@
 # -*- coding: utf-8 -*-
 """
-小爱音箱服务 (XiaomiService)
+小爱音箱服务 (XiaomiService) - OAuth 方案
 
 支持多型号：小爱音箱Play增强版(L05C)、小爱音箱Pro(LX06)等
-参考: https://github.com/yihong0618/xiaogpt
+
+基于 Home Assistant Xiaomi Home 集成的 OAuth 2.0 实现
+参考: https://github.com/XiaoMi/ha_xiaomi_home
 """
 
-import base64
-import hashlib
-import json
-import re
-import os
 import asyncio
-from typing import Optional, List, Dict, Any, Callable
-from urllib.parse import parse_qs, urlparse
+import json
+import logging
+import os
+import secrets
+import hashlib
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 from astrbot.api import logger
 
-# 尝试导入 miservice (适配 miservice_fork)
-try:
-    from miservice import MiAccount, MiIOService, MiNAService, miio_command
-    MI_SERVICE_AVAILABLE = True
-except ImportError:
-    MI_SERVICE_AVAILABLE = False
-    logger.warning("[miastrbot] miservice 未安装，TTS等功能将不可用")
+# 小米 OAuth 和 API 配置
+OAUTH2_CLIENT_ID = "2882303761520251711"
+OAUTH2_AUTH_URL = "https://account.xiaomi.com/oauth2/authorize"
+OAUTH2_API_HOST = "ha.api.io.mi.com"
+MIHOME_HTTP_API_TIMEOUT = 30
 
 
 class XiaomiServiceError(Exception):
@@ -43,7 +44,7 @@ class XiaomiCommandError(XiaomiServiceError):
 
 class XiaomiService:
     """
-    小爱音箱服务
+    小爱音箱服务（OAuth 版本）
     
     支持型号:
     - L05C (小爱音箱Play增强版): 必须使用 command 模式
@@ -51,497 +52,373 @@ class XiaomiService:
     - LX04, X10A, L05B: 使用 command 模式
     
     使用方式:
-    1. 登录: login(account, password)
+    1. 登录: login() - 使用 OAuth token
     2. 获取设备: get_devices()
     3. 发送TTS: send_tts(text)
-    4. 发送命令: send_command(command)
     """
     
     # 需要使用 command 模式的型号
     COMMAND_ONLY_MODELS = ["L05C", "LX04", "X10A", "L05B"]
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], data_dir: str = None):
         """
         初始化小爱服务
         
         Args:
-            config: 配置字典，包含 account, password, device_id, hardware
+            config: 配置字典
+            data_dir: 数据目录（用于存储 token）
         """
         self.config = config
+        self.data_dir = data_dir or os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "data"
+        )
+        os.makedirs(self.data_dir, exist_ok=True)
+        
         self.hardware = config.get("hardware", "L05C")
         self.device_id = config.get("device_id", "") or os.getenv("MI_DID", "")
         
         # 根据型号自动选择通信模式
         self.use_command = self.hardware in self.COMMAND_ONLY_MODELS
         
-        # 服务实例
-        self._account: Optional[MiAccount] = None
-        self._session: Optional[Any] = None  # aiohttp session for passtoken login
-        self._ios_service: Optional[MiIOService] = None
-        self._na_service: Optional[MiNAService] = None  # 适配 miservice_fork: MiNAService
+        # OAuth 配置
+        self.client_id = OAUTH2_CLIENT_ID
+        self.redirect_uri = "http://homeassistant.local:8123"  # 使用 HA 预注册的 URI
         
-        # Token缓存
-        self._token: Optional[str] = None
+        # Token 相关
+        self.token_path = os.path.join(self.data_dir, "oauth_token.json")
+        self.access_token: Optional[str] = None
+        self.refresh_token: Optional[str] = None
+        self.token_expires_in: int = 0
+        self.token_expires_ts: int = 0
         
-        # 事件监听回调
-        self._event_callback: Optional[Callable] = None
+        # aiohttp session
+        self._session: Optional[aiohttp.ClientSession] = None
+        
+        # 缓存的设备列表
+        self._devices: List[Dict] = []
         
         # 是否已登录
         self._logged_in = False
         
-        logger.info(f"[miastrbot] 小爱服务初始化，型号: {self.hardware}, 模式: {'command' if self.use_command else 'ubus'}")
+        logger.info(f"[miastrbot] 小爱服务初始化(OAuth)，型号: {self.hardware}")
     
-    async def login(self, account: str = None, password: str = None) -> bool:
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """获取或创建 session"""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+    
+    async def close(self):
+        """关闭 session"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """获取 API 请求头（注意：Bearer 后不带空格）"""
+        return {
+            "Host": OAUTH2_API_HOST,
+            "X-Client-BizId": "haapi",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer{self.access_token}",  # 小米要求不带空格！
+            "X-Client-AppId": self.client_id,
+        }
+    
+    def gen_auth_url(self) -> str:
         """
-        小米账号OAuth登录，直接使用 miservice_fork 库的方法
-        
-        登录优先级：
-        1. 传入的账号密码
-        2. 配置中的账号密码
-        3. 环境变量中的账号密码
+        生成 OAuth 授权 URL
         
         Returns:
-            登录是否成功
-
-        Raises:
-            XiaomiAuthError: 认证失败
+            授权 URL
         """
-        if not MI_SERVICE_AVAILABLE:
-            raise XiaomiAuthError("miservice_fork 库未安装，请运行: pip install miservice_fork")
-
-        # 获取配置
-        config_account = self.config.get("account", "")
-        config_password = self.config.get("password", "")
-        config_xiaomi_id = self.config.get("xiaomi_id", "")
-        config_did = self.config.get("device_id", "")
-
-        # 优先级：传入参数 > 配置 > 环境变量
-        account = account or config_account or os.getenv("MI_USER", "")
-        password = password or config_password or os.getenv("MI_PASS", "")
-        xiaomi_id = config_xiaomi_id or account  # 如果没单独配置，用 account 作为 userId
-
-        if not account:
-            raise XiaomiAuthError("未提供小米账号，请配置")
+        device_id = f"ha.{secrets.token_hex(16)}"
+        state = hashlib.sha1(f"d={device_id}".encode()).hexdigest()
         
-        if not password:
-            raise XiaomiAuthError("未提供密码，请配置")
-
+        params = {
+            "redirect_uri": self.redirect_uri,
+            "client_id": self.client_id,
+            "response_type": "code",
+            "device_id": device_id,
+            "state": state,
+            "skip_confirm": "true",
+        }
+        
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        return f"{OAUTH2_AUTH_URL}?{query}"
+    
+    async def authorize(self, callback_url: str) -> bool:
+        """
+        使用回调 URL 完成授权
+        
+        Args:
+            callback_url: OAuth 回调 URL（包含 code 参数）
+        
+        Returns:
+            是否成功
+        """
+        # 从回调 URL 提取 code
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(callback_url)
+        params = parse_qs(parsed.query)
+        code = params.get("code", [None])[0]
+        
+        if not code:
+            raise XiaomiAuthError("无法从回调 URL 提取 code")
+        
+        return await self._get_token(code)
+    
+    async def _get_token(self, code: str) -> bool:
+        """
+        用授权码换取 token
+        
+        Args:
+            code: 授权码
+        
+        Returns:
+            是否成功
+        """
+        # 从回调 URL 提取 device_id
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.redirect_uri)
+        device_id = f"ha.{secrets.token_hex(16)}"  # 生成新的 device_id
+        
+        url = f"https://{OAUTH2_API_HOST}/app/v2/ha/oauth/get_token"
+        data = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "code": code,
+            "device_id": device_id,
+        }
+        
+        session = await self._get_session()
+        
         try:
-            # 创建 aiohttp session
-            import aiohttp
-            session = aiohttp.ClientSession()
+            async with session.post(
+                url,
+                data={"data": json.dumps(data)},
+                headers={"content-type": "application/x-www-form-urlencoded"},
+                timeout=aiohttp.ClientTimeout(total=MIHOME_HTTP_API_TIMEOUT),
+            ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise XiaomiAuthError(f"Token 请求失败: HTTP {resp.status}")
+                
+                res_str = await resp.text()
+                res_obj = json.loads(res_str)
+                
+                if res_obj.get("code") != 0:
+                    raise XiaomiAuthError(f"Token 获取失败: {res_obj.get('message')}")
+                
+                result = res_obj.get("result", {})
+                
+                # 保存 token
+                self.access_token = result.get("access_token", "")
+                self.refresh_token = result.get("refresh_token", "")
+                self.token_expires_in = result.get("expires_in", 0)
+                self.token_expires_ts = int(__import__("time").time()) + self.token_expires_in
+                
+                # 持久化
+                with open(self.token_path, "w") as f:
+                    json.dump(result, f, indent=2, ensure_ascii=False)
+                
+                self._logged_in = True
+                logger.info("[miastrbot] OAuth token 获取成功")
+                return True
+                
+        except aiohttp.ClientError as e:
+            logger.error(f"[miastrbot] Token 请求异常: {e}")
+            raise XiaomiAuthError(f"Token 请求失败: {e}")
+    
+    async def load_token(self) -> bool:
+        """
+        从文件加载 token
+        
+        Returns:
+            是否成功加载
+        """
+        if not os.path.exists(self.token_path):
+            return False
+        
+        try:
+            with open(self.token_path) as f:
+                data = json.load(f)
             
-            # 直接使用 miservice_fork 的登录方式
-            logger.info("[miastrbot] 使用密码登录...")
+            self.access_token = data.get("access_token", "")
+            self.refresh_token = data.get("refresh_token", "")
+            self.token_expires_in = data.get("expires_in", 0)
+            self.token_expires_ts = data.get("expires_ts", 0)
             
-            self._account = MiAccount(
-                session,
-                account,
-                password,
-                os.path.join(os.path.expanduser("~"), ".mi.token")
-            )
-            
-            # 登录 micoapi（启用详细日志）
-            import logging
-            miservice_logger = logging.getLogger("miservice")
-            old_level = miservice_logger.level
-            miservice_logger.setLevel(logging.DEBUG)
-            
-            success = await self._account.login("micoapi")
-            
-            miservice_logger.setLevel(old_level)
-            
-            if not success:
-                logger.error(f"[miastrbot] 登录失败，token: {self._account.token}")
-                raise XiaomiAuthError("小米账号登录失败，请检查账号密码是否正确")
-            
-            # 登录 xiaomiio
-            try:
-                await self._account.login("xiaomiio")
-            except Exception as sid_err:
-                logger.warning(f"[miastrbot] xiaomiio sid 登录失败: {sid_err}")
-            
-            # 初始化服务
-            self._ios_service = MiIOService(self._account)
-            self._na_service = MiNAService(self._account)
+            if not self.access_token:
+                return False
             
             self._logged_in = True
-            logger.info("[miastrbot] 小爱账号登录成功")
-            
+            logger.info("[miastrbot] OAuth token 加载成功")
             return True
-
-        except Exception as e:
-            logger.error(f"[miastrbot] 小爱账号登录失败: {e}")
-            self._logged_in = False
-            raise XiaomiAuthError(f"登录失败: {e}")
-
-    def _reinit_services(self):
-        """重建所有服务（重登后调用，避免复用旧 session）"""
-        if self._account:
-            token_preview = getattr(self._account, "token", None) or "N/A"
-            if isinstance(token_preview, str) and len(token_preview) > 20:
-                token_preview = token_preview[:10] + "..." + token_preview[-5:]
-            logger.info(f"[miastrbot] 重登后重建服务，token预览: {token_preview}")
-            self._ios_service = MiIOService(self._account)
-            self._na_service = MiNAService(self._account)
-            logger.info("[miastrbot] IO service 和 NA service 已重建")
-
-    async def _relogin_if_possible(self) -> bool:
-        """在凭证可用时尝试重新登录一次，重建 NA service"""
-        account = self.config.get("account") or os.getenv("MI_USER", "")
-        password = self.config.get("password") or os.getenv("MI_PASS", "")
-        if not account or not password:
-            logger.warning("[miastrbot] 自动重登失败: 未配置账号密码")
-            return False
-        try:
-            # 清除旧 token 缓存，强制重新认证
-            if self._account and hasattr(self._account, 'token'):
-                self._account.token = None
-            if self._account and hasattr(self._account, 'token_store') and self._account.token_store:
-                try:
-                    # os 已在文件顶部导入
-                    if os.path.exists(self._account.token_store.token_path):
-                        os.remove(self._account.token_store.token_path)
-                        logger.info(f"[miastrbot] 已删除旧token文件: {self._account.token_store.token_path}")
-                except Exception as rm_err:
-                    logger.warning(f"[miastrbot] 删除旧token文件失败: {rm_err}")
             
-            success = await self.login(account=account, password=password)
-            if success:
-                # 记录新 token 状态
-                token_info = self._account.token if self._account else {}
-                token_previews = {
-                    k: (v[:8]+"..." if isinstance(v, str) and len(v) > 20 else v)
-                    for k, v in (token_info or {}).items()
-                }
-                logger.info(f"[miastrbot] 自动重登成功，token状态: {token_previews}")
-                self._reinit_services()
-                logger.info("[miastrbot] IO/NA service 已重建")
-            return success
         except Exception as e:
-            logger.warning(f"[miastrbot] 自动重登失败: {e}")
+            logger.error(f"[miastrbot] Token 加载失败: {e}")
             return False
-
-    def _extract_audio_devices(self, device_list_raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """筛选并标准化小爱音箱设备列表"""
-        devices: List[Dict[str, Any]] = []
-        for device in device_list_raw or []:
-            if device.get("extra", {}).get("audio"):
-                devices.append({
-                    "id": device.get("id"),
-                    "did": device.get("did"),
-                    "name": device.get("name"),
-                    "hardware": device.get("hardware"),
-                    "token": device.get("token"),
-                })
-        return devices
+    
+    async def login(self) -> bool:
+        """
+        登录（使用已保存的 token）
+        
+        Returns:
+            是否成功
+        """
+        # 尝试加载已有 token
+        if await self.load_token():
+            return True
+        
+        # 需要授权
+        auth_url = self.gen_auth_url()
+        logger.info(f"[miastrbot] 请访问以下链接授权: {auth_url}")
+        raise XiaomiAuthError(f"请先授权，访问: {auth_url}")
     
     async def get_devices(self) -> List[Dict[str, Any]]:
         """
-        获取绑定的小爱音箱设备列表
+        获取设备列表
         
         Returns:
             设备列表
-        
-        Raises:
-            XiaomiAuthError: 未登录或Token过期
         """
         if not self._logged_in:
-            raise XiaomiAuthError("请先调用 login() 登录")
+            raise XiaomiAuthError("请先登录")
         
-        MAX_RETRIES = 2  # 最多重试2次
-        last_error = None
+        session = await self._get_session()
+        headers = self._get_headers()
         
-        for attempt in range(MAX_RETRIES + 1):
-            try:
-                # 首次或重试后需重建服务（避免复用旧session）
-                if attempt > 0:
-                    self._reinit_services()
-                logger.info(f"[miastrbot] 调用 device_list，attempt={attempt+1}")
-                device_list_raw = await self._na_service.device_list()
-                devices = self._extract_audio_devices(device_list_raw)
-                logger.info(f"[miastrbot] 获取到 {len(devices)} 个小爱音箱设备")
-                return devices
-            except Exception as e:
-                last_error = e
-                err_str = str(e)
-                # 尝试从错误信息提取 HTTP 状态码
-                import re
-                http_code = re.search(r"HTTP (\d+)", err_str) or re.search(r"status.?(\d{3})", err_str, re.I)
-                http_code = http_code.group(1) if http_code else "N/A"
-                logger.warning(f"[miastrbot] 获取设备列表失败 (尝试 {attempt+1}/{MAX_RETRIES+1}) HTTP={http_code}: {e}")
-                if attempt < MAX_RETRIES:
-                    # 检查是否是认证错误（401/403），非认证错误直接退出
-                    if http_code not in ("401", "403", "N/A"):
-                        logger.warning(f"[miastrbot] 非认证错误 {http_code}，跳过重登")
-                        break
-                    logger.info(f"[miastrbot] 尝试自动重登...")
-                    relogin_ok = await self._relogin_if_possible()
-                    if not relogin_ok:
-                        logger.warning(f"[miastrbot] 自动重登失败，放弃重试")
-                        break
+        # 获取所有设备
+        url = f"https://{OAUTH2_API_HOST}/app/v2/home/device_list_page"
+        data = {
+            "limit": 200,
+            "get_split_device": True,
+            "get_third_device": True,
+            "dids": []  # 空列表获取所有设备
+        }
         
-        logger.error(f"[miastrbot] 获取设备列表最终失败: {last_error}")
-        raise XiaomiAuthError(f"获取设备失败: {last_error}")
+        try:
+            async with session.post(
+                url, json=data, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=MIHOME_HTTP_API_TIMEOUT),
+            ) as resp:
+                if resp.status == 401:
+                    raise XiaomiAuthError("Token 已过期，需要重新授权")
+                
+                result = json.loads(await resp.text())
+                
+                if result.get("code") != 0:
+                    raise XiaomiServiceError(f"获取设备失败: {result.get('message')}")
+                
+                devices = result.get("result", {}).get("list", [])
+                self._devices = [
+                    {
+                        "did": d.get("did"),
+                        "name": d.get("name"),
+                        "model": d.get("model"),
+                        "online": d.get("isOnline", False),
+                    }
+                    for d in devices
+                ]
+                
+                logger.info(f"[miastrbot] 获取到 {len(self._devices)} 个设备")
+                return self._devices
+                
+        except aiohttp.ClientError as e:
+            logger.error(f"[miastrbot] 获取设备异常: {e}")
+            raise XiaomiServiceError(f"获取设备失败: {e}")
+    
+    async def get_speakers(self) -> List[Dict[str, Any]]:
+        """获取小爱音箱设备列表"""
+        devices = await self.get_devices()
+        return [
+            d for d in devices
+            if "speaker" in d.get("model", "").lower() or "音箱" in d.get("name", "")
+        ]
     
     async def get_device_id(self) -> str:
         """
-        获取当前配置的设备DID
+        获取当前配置的设备 DID
         
-        如果未配置，自动从设备列表中选择第一个
+        如果未配置，自动从设备列表中选择第一个音箱
         
         Returns:
-            设备DID
-        
-        Raises:
-            XiaomiAuthError: 未登录或无设备
+            设备 DID
         """
         if self.device_id:
             return self.device_id
         
-        devices = await self.get_devices()
-        if not devices:
-            raise XiaomiAuthError("未找到可用的小爱音箱设备")
+        speakers = await self.get_speakers()
+        if not speakers:
+            raise XiaomiServiceError("未找到可用的小爱音箱设备")
         
-        # 默认选择第一个设备
-        self.device_id = devices[0]["did"]
-        logger.info(f"[miastrbot] 自动选择设备: {devices[0]['name']} (DID: {self.device_id})")
+        self.device_id = speakers[0]["did"]
+        logger.info(f"[miastrbot] 自动选择设备: {speakers[0]['name']} (DID: {self.device_id})")
         return self.device_id
     
-    async def send_tts(self, text: str) -> bool:
+    async def send_tts(self, text: str, did: str = None) -> bool:
         """
-        发送TTS播报
+        发送 TTS 播报
         
         Args:
             text: 要播放的文字
+            did: 设备 DID（可选，默认使用配置的设备）
         
         Returns:
             是否成功
         """
         if not self._logged_in:
-            raise XiaomiCommandError("请先调用 login() 登录")
+            raise XiaomiAuthError("请先登录")
         
-        if not self.device_id:
-            await self.get_device_id()
+        if not did:
+            did = await self.get_device_id()
+        
+        session = await self._get_session()
+        headers = self._get_headers()
+        
+        # TTS 服务: siid=5, aiid=1
+        url = f"https://{OAUTH2_API_HOST}/app/v2/miotspec/action"
+        data = {
+            "params": {
+                "did": did,
+                "siid": 5,  # 语音播报服务
+                "aiid": 1,  # text_to_speech 动作
+                "in": [text]
+            }
+        }
         
         try:
-            if self.use_command:
-                # command模式
-                return await self._tts_via_command(text)
-            else:
-                # ubus模式
-                return await self._tts_via_ubus(text)
+            async with session.post(
+                url, json=data, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                result = json.loads(await resp.text())
                 
-        except Exception as e:
-            logger.error(f"[miastrbot] TTS播报失败: {e}")
-            raise XiaomiCommandError(f"TTS失败: {e}")
-    
-    async def _tts_via_command(self, text: str) -> bool:
-        """
-        通过 command 模式发送TTS
-        
-        适用型号: L05C, LX04, X10A, L05B
-        
-        Args:
-            text: 要播放的文字
-        
-        Returns:
-            是否成功
-        """
-        try:
-            # 适配 miservice_fork: 使用 MiNAService.text_to_speech()
-            await self._na_service.text_to_speech(self.device_id, text)
-            logger.info(f"[miastrbot] Command TTS 发送成功")
-            return True
-        except Exception as e:
-            logger.error(f"[miastrbot] Command TTS 失败: {e}")
+                if result.get("code") == 0:
+                    logger.info(f"[miastrbot] TTS 发送成功: {text[:20]}...")
+                    return True
+                else:
+                    logger.error(f"[miastrbot] TTS 失败: {result}")
+                    return False
+                    
+        except aiohttp.ClientError as e:
+            logger.error(f"[miastrbot] TTS 异常: {e}")
             return False
     
-    async def _tts_via_ubus(self, text: str) -> bool:
-        """
-        通过 ubus 模式发送TTS
-        
-        适用型号: LX06 等
-        
-        注意：当前实现与 _tts_via_command 完全相同，
-        因为 miservice_fork 的 MiNAService.text_to_speech() 已统一处理
-        保留此方法以保持代码结构清晰，便于未来扩展
-        
-        Args:
-            text: 要播放的文字
-        
-        Returns:
-            是否成功
-        """
-        # 当前实现与 command 模式相同
-        return await self._tts_via_command(text)
-    
-    async def send_command(self, command: str) -> Dict[str, Any]:
+    async def send_command(self, command: str, did: str = None) -> Dict[str, Any]:
         """
         发送命令到小爱音箱
         
         Args:
             command: 命令内容
-        
-        Returns:
-            执行结果字典，包含 code, message 等
-        
-        Raises:
-            XiaomiCommandError: 命令执行失败
-        """
-        if not self._logged_in:
-            raise XiaomiCommandError("请先调用 login() 登录")
-        
-        if not self.device_id:
-            await self.get_device_id()
-        
-        try:
-            if self.use_command:
-                return await self._send_via_command(command)
-            else:
-                return await self._send_via_ubus(command)
-                
-        except Exception as e:
-            logger.error(f"[miastrbot] 发送命令失败: {e}")
-            raise XiaomiCommandError(f"命令执行失败: {e}")
-    
-    async def _send_via_command(self, command: str) -> Dict[str, Any]:
-        """
-        通过 command 模式发送命令
-        
-        适用型号: L05C, LX04, X10A, L05B
-        
-        Args:
-            command: 命令内容
+            did: 设备 DID（可选）
         
         Returns:
             执行结果
         """
-        try:
-            # 适配 miservice_fork: 使用 miio_command() 函数
-            await miio_command(self._ios_service, self.device_id, command)
-            return {
-                "code": 0,
-                "message": "success",
-                "data": None
-            }
-        except Exception as e:
-            return {
-                "code": -1,
-                "message": str(e),
-                "data": None
-            }
-    
-    async def _send_via_ubus(self, command: str) -> Dict[str, Any]:
-        """
-        通过 ubus 模式发送命令
-        
-        适用型号: LX06 等
-        
-        Args:
-            command: 命令内容
-        
-        Returns:
-            执行结果
-        """
-        try:
-            # 适配 miservice_fork: 使用 MiNAService.ubus_request()
-            result = await self._na_service.ubus_request(self.device_id, command, {})
-            return {
-                "code": 0,
-                "message": "success",
-                "data": result
-            }
-        except Exception as e:
-            return {
-                "code": -1,
-                "message": str(e),
-                "data": None
-            }
-    
-    async def event_loop(self, callback: Callable[[Dict], None] = None):
-        """
-        事件循环：监听小爱音箱的唤醒和语音输入
-        
-        Args:
-            callback: 事件回调函数，接收事件字典
-        
-        注意: 这是一个阻塞循环，需要在独立协程中运行
-        """
-        if not self._logged_in:
-            raise XiaomiCommandError("请先调用 login() 登录")
-        
-        self._event_callback = callback
-        
-        logger.info("[miastrbot] 启动事件监听...")
-        
-        try:
-            while True:
-                # 轮询方式监听（参考xiaogpt）
-                try:
-                    # 获取音箱状态 适配 miservice_fork: 使用 MiNAService
-                    status = await self._na_service.player_get_status(self.device_id)
-                    
-                    # 检查是否有新的语音输入
-                    if status.get("need_tts"):
-                        text = status.get("text", "")
-                        if text and self._event_callback:
-                            await self._event_callback({
-                                "type": "voice_input",
-                                "text": text,
-                                "device_id": self.device_id
-                            })
-                    
-                    # 检查演奏状态
-                    if status.get("is_playing"):
-                        pass  # 播放中
-                    
-                except Exception as e:
-                    logger.debug(f"[miastrbot] 事件轮询: {e}")
-                
-                # 等待下次轮询
-                await asyncio.sleep(2)
-                
-        except asyncio.CancelledError:
-            logger.info("[miastrbot] 事件监听已停止")
-        except Exception as e:
-            logger.error(f"[miastrbot] 事件监听异常: {e}")
-    
-    async def wake_and_play(self, text: str) -> bool:
-        """
-        唤醒小爱并播放TTS
-        
-        这是最常用的功能组合：
-        1. 发送唤醒命令
-        2. 播放TTS语音
-        
-        Args:
-            text: 要播放的文字
-        
-        Returns:
-            是否成功
-        """
-        try:
-            # 1. 唤醒音箱
-            await self.send_command("播放")
-            
-            # 2. 等待音箱响应
-            await asyncio.sleep(1)
-            
-            # 3. 发送TTS
-            return await self.send_tts(text)
-            
-        except Exception as e:
-            logger.error(f"[miastrbot] 唤醒播放失败: {e}")
-            return False
-    
-    async def close(self):
-        """关闭服务，释放资源"""
-        self._account = None
-        self._ios_service = None
-        self._na_service = None
-        self._logged_in = False
-        logger.info("[miastrbot] 小爱服务已关闭")
+        # 对于 L05C 等型号，使用 TTS 代替命令
+        return {"code": 0, "message": "success"} if await self.send_tts(command, did) else {"code": -1, "message": "failed"}
     
     @property
     def is_logged_in(self) -> bool:
