@@ -70,6 +70,7 @@ class XiaomiService:
         
         # 服务实例
         self._account: Optional[MiAccount] = None
+        self._session: Optional[Any] = None  # aiohttp session for passtoken login
         self._ios_service: Optional[MiIOService] = None
         self._na_service: Optional[MiNAService] = None  # 适配 miservice_fork: MiNAService
         
@@ -123,12 +124,16 @@ class XiaomiService:
             # 优先使用 passtoken 登录（参考 migpt-next 的实现）
             if passtoken and xiaomi_id:
                 logger.info("[miastrbot] 使用 passtoken 登录...")
+                # 创建独立的 aiohttp session（不在 with 块内，避免提前关闭）
+                import aiohttp
+                self._session = aiohttp.ClientSession()
                 success = await self._passtoken_login(
                     passtoken=passtoken,
                     user_id=xiaomi_id,
                     sid="micoapi"
                 )
                 if not success:
+                    await self._session.close()
                     raise XiaomiAuthError("passtoken 登录失败，请检查是否过期")
                 # MiNA 登录成功，继续登录 xiaomiio
                 try:
@@ -188,17 +193,14 @@ class XiaomiService:
         """
         from miservice.miaccount import get_random
 
-        if not self._account:
-            # 创建一个假的 MiAccount 实例用于调用内部方法
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                self._account = MiAccount(
-                    session, user_id, "",  # password 可以是空
-                    os.path.join(os.path.expanduser("~"), ".mi.token")
-                )
+        # 创建 MiAccount 实例（复用 self._session，不创建在 with 块内）
+        self._account = MiAccount(
+            self._session, user_id, "",
+            os.path.join(os.path.expanduser("~"), ".mi.token")
+        )
 
         # 初始化 token
-        if not hasattr(self._account, 'token') or not self._account.token:
+        if not self._account.token:
             self._account.token = {"deviceId": get_random(16).upper()}
         self._account.token["userId"] = user_id
         self._account.token["passToken"] = passtoken
@@ -213,7 +215,7 @@ class XiaomiService:
         headers = {"User-Agent": self._account.now_ua}
         url = "https://account.xiaomi.com/pass/serviceLogin?sid=" + sid + "&_json=true"
 
-        async with self._account.session.request(
+        async with self._session.request(
             "GET", url, cookies=cookies, headers=headers, ssl=False
         ) as r:
             import json
@@ -238,7 +240,7 @@ class XiaomiService:
         from urllib import parse
         nsec = f"nonce={nonce}&{ssecurity}"
         clientSign = base64.b64encode(hashlib.sha1(nsec.encode()).digest()).decode()
-        async with self._account.session.get(
+        async with self._session.get(
             location + "&clientSign=" + parse.quote(clientSign)
         ) as r:
             serviceToken = r.cookies.get("serviceToken")
