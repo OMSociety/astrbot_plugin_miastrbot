@@ -45,7 +45,7 @@ th{color:#334155;background:#f8fafc}
 
   <div class="toolbar">
     <button class="btn-primary" id="btnRefresh">刷新状态</button>
-    <button class="btn-primary" id="btnXiaomiLogin">小爱重新登录</button>
+    <button class="btn-primary" id="btnSpeakerLogin">小爱重新登录</button>
     <button class="btn-primary" id="btnMihomeLogin">米家扫码登录</button>
     <a class="btn-link btn-secondary" href="/miastrbot/api/logout">退出 WebUI</a>
     <a class="btn-link btn-secondary" href="/miastrbot/api/config" target="_blank">查看配置</a>
@@ -56,7 +56,7 @@ th{color:#334155;background:#f8fafc}
       <h2>连接状态</h2>
       <ul class="status-list">
         <li class="status-item"><span>WebUI 登录</span><span class="tag" id="tagWebui">检查中</span></li>
-        <li class="status-item"><span>小爱账号</span><span class="tag" id="tagXiaomi">检查中</span></li>
+        <li class="status-item"><span>小爱音箱</span><span class="tag" id="tagXiaomi">检查中</span></li>
         <li class="status-item"><span>米家授权</span><span class="tag" id="tagMihome">检查中</span></li>
       </ul>
       <div class="message" id="msgStatus"></div>
@@ -64,7 +64,7 @@ th{color:#334155;background:#f8fafc}
 
     <section class="card" id="mihomeLoginCard">
       <h2>米家扫码登录</h2>
-      <p class="small">点击“米家扫码登录”后，若获取到链接请用手机米家 App 打开/扫码。</p>
+      <p class="small">点击"米家扫码登录"后，若获取到链接请用手机米家 App 打开/扫码。</p>
       <div class="qr-url" id="qrBox">
         <div class="small">扫码链接：</div>
         <div class="mono" id="qrUrl"></div>
@@ -81,12 +81,12 @@ th{color:#334155;background:#f8fafc}
     </section>
 
     <section class="card">
-      <h2>小爱设备</h2>
+      <h2>小爱音箱</h2>
       <table>
         <thead><tr><th>名称</th><th>DID</th><th>型号</th></tr></thead>
-        <tbody id="xiaomiDevices"><tr><td colspan="3" class="small">加载中...</td></tr></tbody>
+        <tbody id="speakerDevices"><tr><td colspan="3" class="small">加载中...</td></tr></tbody>
       </table>
-      <div class="message" id="msgXiaomi"></div>
+      <div class="message" id="msgSpeaker"></div>
     </section>
   </div>
 </div>
@@ -110,18 +110,6 @@ function hideMsg(id) {
   const node = el(id);
   node.className = "message";
   node.textContent = "";
-}
-
-function setMihomeLoginVisible(visible) {
-  const loginCard = el("mihomeLoginCard");
-  const loginBtn = el("btnMihomeLogin");
-  const qrBox = el("qrBox");
-  if (loginCard) loginCard.style.display = visible ? "" : "none";
-  if (loginBtn) loginBtn.style.display = visible ? "" : "none";
-  if (!visible) {
-    if (qrBox) qrBox.classList.remove("show");
-    hideMsg("msgMihome");
-  }
 }
 
 function renderTable(tbodyId, rows, cols) {
@@ -150,64 +138,58 @@ async function getJSON(url) {
   return { ok: res.ok, data };
 }
 
-async function postForm(url, form = null) {
-  const res = await fetch(url, {
-    method: "POST",
-    body: form,
-    credentials: "same-origin"
-  });
-  let data = {};
-  try {
-    data = await res.json();
-  } catch (_err) {
-    data = { success: false, message: "服务返回了非 JSON 响应" };
-  }
-  return { ok: res.ok, data };
-}
-
 async function refreshAll() {
   hideMsg("msgStatus");
   try {
-    const [webui, auth, devices, xiaomi] = await Promise.all([
-      getJSON("/miastrbot/api/status"),
-      getJSON("/miastrbot/api/auth/status"),
-      getJSON("/miastrbot/api/devices"),
-      getJSON("/miastrbot/api/xiaomi/devices")
-    ]);
-
+    // 获取 WebUI 登录状态
+    const webui = await getJSON("/miastrbot/api/status");
     setTag("tagWebui", !!webui.data.authenticated, webui.data.authenticated ? "已登录" : "未登录");
-    setTag("tagXiaomi", !!auth.data.xiaomi, auth.data.xiaomi ? "已连接" : "未连接");
-    setTag("tagMihome", !!auth.data.mihome, auth.data.mihome ? "已授权" : "未授权");
-    setMihomeLoginVisible(!auth.data.mihome);
+
+    // 获取小爱音箱状态
+    const speakerStatus = await getJSON("/miastrbot/api/speaker/status");
+    const speakerConnected = speakerStatus.data?.data?.connected || false;
+    setTag("tagXiaomi", speakerConnected, speakerConnected ? "已连接" : "未连接");
+
+    // 获取米家设备
+    const devices = await getJSON("/miastrbot/api/devices");
+    const mihomeConnected = devices.data?.mihome_connected || false;
+    setTag("tagMihome", mihomeConnected, mihomeConnected ? "已授权" : "未授权");
 
     if (!devices.data.success) {
       showMsg("msgStatus", devices.data.message || "米家设备获取失败", "bad");
     }
     renderTable("mihomeDevices", devices.data.data || [], 3);
 
-    if (!xiaomi.data.success && xiaomi.data.message) {
-      showMsg("msgXiaomi", xiaomi.data.message, "bad");
+    // 获取小爱音箱设备列表
+    const speakerDevices = await getJSON("/miastrbot/api/speaker/devices");
+    if (!speakerDevices.data.success && speakerDevices.data.message) {
+      showMsg("msgSpeaker", speakerDevices.data.message, "bad");
     } else {
-      hideMsg("msgXiaomi");
+      hideMsg("msgSpeaker");
     }
-    renderTable("xiaomiDevices", xiaomi.data.data || [], 3);
+    renderTable("speakerDevices", speakerDevices.data.data || [], 3);
+
   } catch (_err) {
     setTag("tagWebui", false, "异常");
     setTag("tagXiaomi", false, "异常");
     setTag("tagMihome", false, "异常");
     showMsg("msgStatus", "状态刷新失败（网络或服务异常），请稍后重试", "bad");
     renderTable("mihomeDevices", [], 3);
-    renderTable("xiaomiDevices", [], 3);
+    renderTable("speakerDevices", [], 3);
   }
 }
 
-async function xiaomiLogin() {
+async function speakerLogin() {
   try {
-    const { data } = await postForm("/miastrbot/api/xiaomi/login");
-    showMsg("msgXiaomi", data.message || (data.success ? "操作成功" : "操作失败"), data.success ? "ok" : "bad");
+    const res = await fetch("/miastrbot/api/speaker/login", {
+      method: "POST",
+      credentials: "same-origin"
+    });
+    const data = await res.json();
+    showMsg("msgSpeaker", data.message || (data.success ? "操作成功" : "操作失败"), data.success ? "ok" : "bad");
     await refreshAll();
   } catch (_err) {
-    showMsg("msgXiaomi", "小爱登录请求失败，请检查网络后重试", "bad");
+    showMsg("msgSpeaker", "小爱登录请求失败，请检查网络后重试", "bad");
   }
 }
 
@@ -247,7 +229,7 @@ function wsLogin() {
 }
 
 el("btnRefresh").addEventListener("click", refreshAll);
-el("btnXiaomiLogin").addEventListener("click", xiaomiLogin);
+el("btnSpeakerLogin").addEventListener("click", speakerLogin);
 el("btnMihomeLogin").addEventListener("click", wsLogin);
 refreshAll();
 </script>
