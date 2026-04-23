@@ -9,6 +9,19 @@
                 "default": "",
                 "hint": "邮箱或手机号，用于登录小爱音箱"
             },
+            "xiaomi_id": {
+                "description": "小米数字 ID",
+                "type": "string",
+                "default": "",
+                "hint": "不是手机号/邮箱，可在小米账号「个人信息」-「小米 ID」查看，例如：2758463163"
+            },
+            "passtoken": {
+                "description": "PassToken",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true,
+                "hint": "从 https://account.xiaomi.com/ 获取的 passtoken，格式：V1:xxx。用于绕过密码登录"
+            },
             "password": {
                 "description": "密码",
                 "type": "string",
@@ -29,7 +42,6 @@
             }
         }
     },
-
     "speaker": {
         "description": "对话模式配置",
         "type": "object",
@@ -54,7 +66,6 @@
             }
         }
     },
-
     "weather": {
         "description": "天气查询配置",
         "type": "object",
@@ -72,7 +83,6 @@
             }
         }
     },
-
     "tts": {
         "description": "TTS 播报配置",
         "type": "object",
@@ -132,7 +142,6 @@
             }
         }
     },
-
     "webui": {
         "description": "WebUI 管理面板",
         "type": "object",

@@ -86,56 +86,84 @@ class XiaomiService:
     
     async def login(self, account: str = None, password: str = None) -> bool:
         """
-        小米账号OAuth登录
-        
+        小米账号OAuth登录，支持两种方式：
+        1. passtoken 登录（推荐）：使用预授权的 passtoken，跳过密码验证
+        2. 密码登录：传统的 username + password 登录
+
         Args:
             account: 小米账号（优先使用）
             password: 密码（优先使用）
-        
+
         Returns:
             登录是否成功
-        
+
         Raises:
             XiaomiAuthError: 认证失败
         """
         if not MI_SERVICE_AVAILABLE:
             raise XiaomiAuthError("miservice 库未安装，请运行: pip install miservice")
-        
-        # 优先使用传入的参数，其次使用配置，最后尝试环境变量
-        account = account or self.config.get("account") or os.getenv("MI_USER", "")
-        password = password or self.config.get("password") or os.getenv("MI_PASS", "")
-        
-        if not account or not password:
-            raise XiaomiAuthError("未提供小米账号密码，请配置或设置环境变量 MI_USER/MI_PASS")
-        
+
+        # 获取配置
+        config_account = self.config.get("account", "")
+        config_password = self.config.get("password", "")
+        config_passtoken = self.config.get("passtoken", "")
+        config_xiaomi_id = self.config.get("xiaomi_id", "")
+        config_did = self.config.get("device_id", "")
+
+        # 优先级：传入参数 > 配置 > 环境变量
+        account = account or config_account or os.getenv("MI_USER", "")
+        password = password or config_password or os.getenv("MI_PASS", "")
+        passtoken = config_passtoken or os.getenv("MI_PASSTOKEN", "")
+        xiaomi_id = config_xiaomi_id or account  # 如果没单独配置，用 account 作为 userId
+
+        if not account and not passtoken:
+            raise XiaomiAuthError("未提供小米账号或 passtoken，请配置")
+
         try:
-            # 创建账号实例
-            self._account = MiAccount(
-                account,
-                password,
-                os.path.join(os.path.expanduser("~"), ".mi.token")
-            )
-            
-            # 登录获取 token（兼容不同 miservice 版本）
-            sid_supported = True
-            try:
-                # micoapi 用于 MiNA 设备能力
-                await self._account.login("micoapi")
-            except TypeError:
-                sid_supported = False
-                await self._account.login()
-            if sid_supported:
-                # xiaomiio 用于 MiIO 指令能力，失败时不阻断主流程
+            # 优先使用 passtoken 登录（参考 migpt-next 的实现）
+            if passtoken and xiaomi_id:
+                logger.info("[miastrbot] 使用 passtoken 登录...")
+                success = await self._passtoken_login(
+                    passtoken=passtoken,
+                    user_id=xiaomi_id,
+                    sid="micoapi"
+                )
+                if not success:
+                    raise XiaomiAuthError("passtoken 登录失败，请检查是否过期")
+                # MiNA 登录成功，继续登录 xiaomiio
                 try:
-                    await self._account.login("xiaomiio")
+                    await self._passtoken_login(passtoken=passtoken, user_id=xiaomi_id, sid="xiaomiio")
                 except Exception as sid_err:
-                    logger.warning(f"[miastrbot] xiaomiio sid 登录失败，继续使用 micoapi: {sid_err}")
-            
+                    logger.warning(f"[miastrbot] xiaomiio sid passtoken 登录失败: {sid_err}")
+            elif password:
+                # 回退到密码登录
+                logger.info("[miastrbot] 使用密码登录...")
+                if not password:
+                    raise XiaomiAuthError("未提供密码，请配置")
+                self._account = MiAccount(
+                    account,
+                    password,
+                    os.path.join(os.path.expanduser("~"), ".mi.token")
+                )
+
+                sid_supported = True
+                try:
+                    await self._account.login("micoapi")
+                except TypeError:
+                    sid_supported = False
+                    await self._account.login()
+                if sid_supported:
+                    try:
+                        await self._account.login("xiaomiio")
+                    except Exception as sid_err:
+                        logger.warning(f"[miastrbot] xiaomiio sid 登录失败: {sid_err}")
+            else:
+                raise XiaomiAuthError("未提供密码或 passtoken，请至少配置一项")
+
             # 初始化服务
             self._ios_service = MiIOService(self._account)
-            # 适配 miservice_fork: 使用 MiNAService 替代 MiOTService
             self._na_service = MiNAService(self._account)
-            
+
             self._logged_in = True
             logger.info("[miastrbot] 小爱账号登录成功")
 
@@ -145,6 +173,85 @@ class XiaomiService:
             logger.error(f"[miastrbot] 小爱账号登录失败: {e}")
             self._logged_in = False
             raise XiaomiAuthError(f"登录失败: {e}")
+
+    async def _passtoken_login(self, passtoken: str, user_id: str, sid: str) -> bool:
+        """
+        使用 passtoken 登录（参考 migpt-next 的实现）
+
+        Args:
+            passtoken: 小米账号的预授权 token
+            user_id: 小米数字 ID
+            sid: 服务 ID（micoapi / xiaomiio）
+
+        Returns:
+            登录是否成功
+        """
+        from miservice.miaccount import get_random
+
+        if not self._account:
+            # 创建一个假的 MiAccount 实例用于调用内部方法
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                self._account = MiAccount(
+                    session, user_id, "",  # password 可以是空
+                    os.path.join(os.path.expanduser("~"), ".mi.token")
+                )
+
+        # 初始化 token
+        if not hasattr(self._account, 'token') or not self._account.token:
+            self._account.token = {"deviceId": get_random(16).upper()}
+        self._account.token["userId"] = user_id
+        self._account.token["passToken"] = passtoken
+
+        # 调用 serviceLogin
+        self._account.now_ua = self._account.ua.random
+        cookies = {
+            "userId": user_id,
+            "passToken": passtoken,
+            "deviceId": self._account.token.get("deviceId")
+        }
+        headers = {"User-Agent": self._account.now_ua}
+        url = "https://account.xiaomi.com/pass/serviceLogin?sid=" + sid + "&_json=true"
+
+        async with self._account.session.request(
+            "GET", url, cookies=cookies, headers=headers, ssl=False
+        ) as r:
+            import json
+            raw = await r.read()
+            resp = json.loads(raw[11:])  # 去掉前缀
+
+        if resp.get("code") != 0:
+            logger.error(f"[miastrbot] passtoken serviceLogin 失败: {resp}")
+            return False
+
+        # 获取 serviceToken
+        location = resp.get("location")
+        nonce = resp.get("nonce")
+        ssecurity = resp.get("ssecurity")
+
+        if not location or not nonce or not ssecurity:
+            logger.error(f"[miastrbot] passtoken 响应缺少必要字段: {resp}")
+            return False
+
+        # 获取 serviceToken
+        import base64, hashlib
+        from urllib import parse
+        nsec = f"nonce={nonce}&{ssecurity}"
+        clientSign = base64.b64encode(hashlib.sha1(nsec.encode()).digest()).decode()
+        async with self._account.session.get(
+            location + "&clientSign=" + parse.quote(clientSign)
+        ) as r:
+            serviceToken = r.cookies.get("serviceToken")
+            if serviceToken:
+                serviceToken = serviceToken.value
+            if not serviceToken:
+                logger.error(f"[miastrbot] passtoken 未获取到 serviceToken")
+                return False
+
+        # 保存 token
+        self._account.token[sid] = (ssecurity, serviceToken)
+        logger.info(f"[miastrbot] passtoken 登录成功 (sid={sid})")
+        return True
 
     def _reinit_services(self):
         """重建所有服务（重登后调用，避免复用旧 session）"""
