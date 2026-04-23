@@ -13,7 +13,7 @@
                 "description": "小米数字 ID",
                 "type": "string",
                 "default": "",
-                "hint": "不是手机号/邮箱，可在小米账号「个人信息」-「小米 ID」查看，例如：2758463163"
+                "hint": "不是手机号/邮箱，可在小米账号「个人信息」-「小米 ID」查看"
             },
             "passtoken": {
                 "description": "PassToken",
