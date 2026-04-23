@@ -21,7 +21,7 @@ from .config_manager import MiASTRBotConfigManager
 from .services.xiaomi_speaker_service import XiaomiSpeakerService, XiaomiSpeakerError, XiaomiSpeakerAuthError
 from .services.mihome_service import MiHomeService, MiHomeAuthError, MiHomeControlError
 from .services.tts_service import TTSServer, TTSServerError
-from .agent.handler import AgentHandler
+from .agent.handler import AgentHandler, IntentType
 from .webui import init_container, Server
 from .webui.config import WebUIConfig
 from .utils.logging import init_logging
@@ -187,7 +187,7 @@ class MiASTRBotPlugin(Star):
             asyncio.create_task(self._run_speaker_polling())
 
     async def _run_speaker_polling(self):
-        """运行小爱音箱语音轮询"""
+        """运行小爱音箱语音轮询（支持等待模式）"""
         self.log.info("启动小爱音箱语音轮询...")
         
         try:
@@ -200,9 +200,19 @@ class MiASTRBotPlugin(Star):
                     try:
                         response = await self.agent_handler.process(query)
                         if response:
-                            result = response.get("result") if isinstance(response, dict) else str(response)
-                            if result:
-                                await self.speaker_service.speak(result)
+                            intent = response.get("intent", "")
+                            tts_text = response.get("tts_text", "")
+                            
+                            # 等待模式下，只回复"我在呢"，继续监听
+                            if intent == IntentType.WAITING:
+                                await self.speaker_service.speak(tts_text)
+                                self.log.info("进入等待模式，继续监听...")
+                                # 继续下一次循环，等待用户继续说话
+                                continue
+                            
+                            # 正常回复
+                            if tts_text:
+                                await self.speaker_service.speak(tts_text)
                     except Exception as e:
                         self.log.error(f"处理语音命令失败: {e}")
                         await self.speaker_service.speak("处理命令失败，请稍后重试")
@@ -344,9 +354,9 @@ class MiASTRBotPlugin(Star):
             try:
                 response = await self.agent_handler.process(message_text)
                 if response:
-                    result = response.get("result") if isinstance(response, dict) else str(response)
-                    if result:
-                        await event.send(MessageChain([Plain(result)]))
+                    tts_text = response.get("tts_text", "")
+                    if tts_text:
+                        await event.send(MessageChain([Plain(tts_text)]))
             except Exception as e:
                 self.log.error(f"Agent 处理失败: {e}")
     

@@ -34,6 +34,12 @@
                 "default": false,
                 "hint": "开启后私聊消息直接进 AI 意图识别"
             },
+            "wake_words": {
+                "description": "唤醒词",
+                "type": "string",
+                "default": "",
+                "hint": "示例：小爱。说出唤醒词后进入 LLM 对话模式"
+            },
             "model": {
                 "description": "LLM 模型",
                 "type": "string",

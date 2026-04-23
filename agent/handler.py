@@ -3,7 +3,7 @@
 Agent指令处理器 (AgentHandler)
 
 负责：
-1. 唤醒词检测
+1. 唤醒词检测（支持等待模式）
 2. 意图识别（关键词）
 3. 设备控制指令解析
 4. 天气查询（心知天气 API）
@@ -14,6 +14,8 @@ import json
 import re
 import asyncio
 from typing import Dict, Any, Optional, List
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 from astrbot.api import logger
 
@@ -28,6 +30,7 @@ from .prompts import (
 class IntentType:
     """意图类型枚举"""
     WAKE_WORD = "wake_word"  # 唤醒词触发，进入 LLM 对话
+    WAITING = "waiting"  # 等待模式，等待用户继续说话
     DEVICE_CONTROL = "device_control"
     DEVICE_QUERY = "device_query"
     WEATHER_QUERY = "weather_query"
@@ -36,15 +39,41 @@ class IntentType:
     UNKNOWN = "unknown"
 
 
+@dataclass
+class WakeWordSession:
+    """唤醒词对话会话"""
+    wake_word: str  # 触发会话的唤醒词
+    messages: List[str] = field(default_factory=list)  # 用户消息列表
+    start_time: datetime = field(default_factory=datetime.now)
+    timeout_seconds: int = 10  # 等待超时时间（秒）
+    
+    def is_expired(self) -> bool:
+        """检查会话是否超时"""
+        elapsed = (datetime.now() - self.start_time).total_seconds()
+        return elapsed > self.timeout_seconds
+    
+    def add_message(self, text: str):
+        """添加用户消息"""
+        self.messages.append(text)
+        self.start_time = datetime.now()  # 更新活动时间
+    
+    def get_combined_text(self) -> str:
+        """获取合并后的对话文本"""
+        return "。".join(self.messages)
+
+
 class AgentHandler:
     """
     Agent 指令处理器
     
     处理流程：
-    1. 检查唤醒词（如「芙兰」「小爱同学」）
-    2. 如果是唤醒词 → 调用 LLM 对话
-    3. 否则进行意图识别 → 设备控制/天气/时间/闲聊
-    4. 返回 {intent, result, tts_text} 统一格式
+    1. 检查唤醒词（如「芙兰」「小爱」）
+    2. 如果是唤醒词 → 检查是否有后续内容
+       - 有后续内容 → 调用 LLM 对话
+       - 没有后续内容 → 进入等待模式
+    3. 如果在等待模式 → 合并消息后调用 LLM
+    4. 否则进行意图识别 → 设备控制/天气/时间/闲聊
+    5. 返回 {intent, result, tts_text} 统一格式
     """
     
     def __init__(self, speaker_service=None, mihome_service=None, tts_server=None, config: Dict[str, Any] = None, context=None):
@@ -61,20 +90,22 @@ class AgentHandler:
         self.model = self.config.get("model", "gpt-4o-mini")
         
         # 唤醒词配置（逗号分隔）
-        wake_words_str = self.config.get("wake_words", "芙兰,小爱同学")
+        wake_words_str = self.config.get("wake_words", "")
         self.wake_words = [w.strip() for w in wake_words_str.split(",") if w.strip()]
+        
+        # 等待模式配置
+        self.wait_timeout = self.config.get("wait_timeout", 10)  # 等待超时秒数
+        
+        # 当前唤醒词会话（用于等待模式）
+        self._wake_session: Optional[WakeWordSession] = None
         
         # 天气配置
         self.weather_api_key = self.config.get("weather_api_key", "")
         self.weather_city = self.config.get("weather_city", "北京")
         
-        # 设备列表缓存
-        self._devices_cache: List[Dict] = []
-        self._devices_cache_time: float = 0
-        
-        logger.info(f"[miastrbot] Agent处理器初始化，唤醒词: {self.wake_words}，LLM模型: {self.model}")
+        logger.info(f"[miastrbot] Agent处理器初始化，唤醒词: {self.wake_words or '未配置'}，LLM模型: {self.model}")
 
-    def _check_wake_word(self, text: str) -> Optional[str]:
+    def _check_wake_word(self, text: str) -> tuple:
         """
         检查是否包含唤醒词
         
@@ -82,21 +113,16 @@ class AgentHandler:
             text: 用户输入文本
         
         Returns:
-            唤醒词内容（如"芙兰，今天天气怎么样"中的"，今天天气怎么样"）
-            如果没有唤醒词返回 None
+            (是否唤醒词, 唤醒词, 后续内容)
+            如果是唤醒词，返回 (True, "唤醒词", "后续内容")
+            如果不是唤醒词，返回 (False, "", "")
         """
         text = text.strip()
         for wake_word in self.wake_words:
-            if text.startswith(wake_word):
-                # 去除唤醒词，保留后续内容
+            if wake_word and text.startswith(wake_word):
                 content = text[len(wake_word):].strip()
-                # 如果唤醒词后面还有内容
-                if content:
-                    return content
-                else:
-                    # 只有唤醒词，没有后续内容
-                    return ""
-        return None
+                return True, wake_word, content
+        return False, "", ""
     
     async def process(self, text: str) -> Dict[str, Any]:
         """
@@ -121,12 +147,17 @@ class AgentHandler:
         logger.info(f"[miastrbot] Agent处理输入: {text}")
         
         try:
-            # 1. 先检查唤醒词
-            wake_content = self._check_wake_word(text)
-            if wake_content is not None:
-                return await self._handle_wake_word(wake_content)
+            # 1. 检查唤醒词
+            is_wake, wake_word, content = self._check_wake_word(text)
             
-            # 2. 否则进行意图识别
+            if is_wake:
+                return await self._handle_wake_word(wake_word, content)
+            
+            # 2. 检查是否在等待模式
+            if self._wake_session and not self._wake_session.is_expired():
+                return await self._handle_waiting_mode(text)
+            
+            # 3. 否则进行意图识别
             intent = await self._recognize_intent(text)
             logger.debug(f"[miastrbot] 识别意图: {intent}")
             
@@ -147,28 +178,72 @@ class AgentHandler:
             logger.error(f"[miastrbot] Agent处理异常: {e}")
             return self._unknown_result(f"处理失败：{str(e)}")
     
-    async def _handle_wake_word(self, content: str) -> Dict[str, Any]:
+    async def _handle_wake_word(self, wake_word: str, content: str) -> Dict[str, Any]:
         """
-        处理唤醒词触发的 LLM 对话
+        处理唤醒词触发
         
         Args:
-            content: 唤醒词后面的内容（为空时表示只说了唤醒词）
+            wake_word: 唤醒词
+            content: 唤醒词后面的内容（可能为空）
         
         Returns:
             处理结果
         """
         if not content:
-            # 只说了唤醒词，没有后续内容
+            # 只有唤醒词，进入等待模式
+            self._wake_session = WakeWordSession(
+                wake_word=wake_word,
+                timeout_seconds=self.wait_timeout
+            )
+            logger.info(f"[miastrbot] 进入等待模式，等待用户继续说话")
             return {
-                "intent": IntentType.WAKE_WORD,
+                "intent": IntentType.WAITING,
                 "result": None,
-                "tts_text": "我在呢，有什么需要帮忙的吗？",
+                "tts_text": "我在呢，你说~",
                 "success": True,
             }
         
-        # 调用 LLM 进行对话
+        # 有后续内容，直接调用 LLM
         try:
             response_text = await self._call_llm_chat(content)
+            return {
+                "intent": IntentType.WAKE_WORD,
+                "result": response_text,
+                "tts_text": response_text,
+                "success": True,
+            }
+        except Exception as e:
+            logger.error(f"[miastrbot] LLM对话失败: {e}")
+            return {
+                "intent": IntentType.WAKE_WORD,
+                "result": None,
+                "tts_text": "抱歉，思考出了问题，请稍后重试",
+                "success": False,
+            }
+    
+    async def _handle_waiting_mode(self, text: str) -> Dict[str, Any]:
+        """
+        处理等待模式 - 用户继续说话
+        
+        Args:
+            text: 用户新说的话
+        """
+        # 清除等待会话
+        session = self._wake_session
+        self._wake_session = None
+        
+        if not session:
+            return self._unknown_result("出了点小问题，请再说一次唤醒词")
+        
+        # 添加消息到会话
+        session.add_message(text)
+        
+        # 合并消息发给 LLM
+        combined_text = session.get_combined_text()
+        logger.info(f"[miastrbot] 等待模式合并消息: {combined_text}")
+        
+        try:
+            response_text = await self._call_llm_chat(combined_text)
             return {
                 "intent": IntentType.WAKE_WORD,
                 "result": response_text,
@@ -195,11 +270,9 @@ class AgentHandler:
             LLM 回复文本
         """
         if not self.context:
-            # 没有 context，返回默认回复
             return self._get_simple_chat_response(user_input)
         
-        # 构建 prompt
-        prompt = f"""你是一个智能助手，用户通过语音与你对话。请用简洁、自然的语言回答。
+        prompt = f"""你是一个智能助手，用户通过语音与你对话。请用简洁，自然的语言回答。
 
 用户说：{user_input}
 
@@ -253,7 +326,6 @@ class AgentHandler:
         if has_query:
             return IntentType.DEVICE_QUERY
         
-        # 默认闲聊
         return IntentType.CHAT
     
     async def _handle_device_control(self, text: str) -> Dict[str, Any]:
