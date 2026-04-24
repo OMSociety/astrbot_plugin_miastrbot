@@ -306,15 +306,17 @@ class AgentHandler:
         return "嗯嗯，芙兰听到了~还有什么需要帮忙的吗？"
     
     async def _recognize_intent(self, text: str) -> str:
-        """用关键词识别意图类型"""
-        # 天气关键词
+        """识别意图类型
+        
+        优先用关键词快速匹配，未命中时如果 LLM 可用则用 LLM 判断。
+        """
+        # 快速路径：天气、时间关键词
         if any(kw in text for kw in ["天气", "温度", "下雨", "晴", "下雪", "刮风"]):
             return IntentType.WEATHER_QUERY
-        # 时间关键词
         if any(kw in text for kw in ["几点", "时间", "现在", "几点钟", "几点了"]):
             return IntentType.TIME_QUERY
         
-        # 设备控制关键词
+        # 快速路径：设备控制/查询关键词
         control_kws = ["开", "关", "打开", "关闭", "启动", "停止", "调亮", "调暗", "调高", "调低"]
         query_kws = ["多少", "什么", "怎么", "开着吗", "关着吗", "状态", "查询", "看看", "看一下"]
         
@@ -326,7 +328,49 @@ class AgentHandler:
         if has_query:
             return IntentType.DEVICE_QUERY
         
+        # 未命中关键词时，尝试用 LLM 判断意图
+        if self.context:
+            try:
+                llm_intent = await self._llm_recognize_intent(text)
+                if llm_intent:
+                    return llm_intent
+            except Exception as e:
+                logger.debug(f"[miastrbot] LLM 意图识别失败: {e}")
+        
         return IntentType.CHAT
+    
+    async def _llm_recognize_intent(self, text: str) -> Optional[str]:
+        """使用 LLM 判断意图"""
+        devices_context = ""
+        if self.mihome_service:
+            aliases = list(self.mihome_service.device_aliases.keys())[:20]
+            if aliases:
+                devices_context = "\n已知设备: " + ", ".join(aliases)
+        
+        prompt = INTENT_PROMPT.format(
+            user_input=text,
+            devices_context=devices_context
+        )
+        
+        try:
+            resp = await self.context.llm_generate(prompt=prompt)
+            intent_text = (resp.completion_text or resp.text or "").strip().lower()
+            
+            intent_map = {
+                "device_control": IntentType.DEVICE_CONTROL,
+                "device_query": IntentType.DEVICE_QUERY,
+                "weather_query": IntentType.WEATHER_QUERY,
+                "time_query": IntentType.TIME_QUERY,
+                "chat": IntentType.CHAT,
+            }
+            
+            for key, value in intent_map.items():
+                if key in intent_text:
+                    return value
+            
+            return None
+        except Exception:
+            return None
     
     async def _handle_device_control(self, text: str) -> Dict[str, Any]:
         """处理设备控制指令"""

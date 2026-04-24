@@ -43,7 +43,7 @@ class MiASTRBotPlugin(Star):
         self.context = context
         
         # 初始化日志
-        plugin_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        plugin_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         log_dir = os.path.join(plugin_dir, "logs")
         self.log = init_logging(log_dir=log_dir)
         self.log.info("插件初始化中...")
@@ -60,6 +60,7 @@ class MiASTRBotPlugin(Star):
         # 生命周期任务
         self._webui_server = None
         self._running = False
+        self._initialized = False
         self._init_lock = asyncio.Lock()
         
         self.log.info("插件初始化完成")
@@ -72,11 +73,18 @@ class MiASTRBotPlugin(Star):
         # 初始化服务
         try:
             await self._init_services()
+            self._initialized = True
             self._running = True
         except Exception as e:
             self.log.error(f"❌ 服务初始化失败: {e}")
             import traceback
             self.log.error(traceback.format_exc())
+            self._initialized = False
+        
+        # 服务未初始化完成则不启动 WebUI
+        if not self._initialized:
+            self.log.warning("服务未初始化完成，WebUI 不启动")
+            return
         
         # 检查是否启用 WebUI
         enable_webui = self.config_manager.get("webui.enable", True)
@@ -91,7 +99,7 @@ class MiASTRBotPlugin(Star):
             password=self.config_manager.get("webui.password", "")
         )
         
-        # 初始化容器
+        # 确保服务都已初始化后再注入容器
         init_container(
             config_manager=self.config_manager,
             speaker_service=self.speaker_service,
@@ -231,8 +239,6 @@ class MiASTRBotPlugin(Star):
             success = await self.speaker_service.login()
             if success:
                 self.log.info("小爱音箱登录成功")
-                # 登录成功后启动轮询
-                asyncio.create_task(self._run_speaker_polling())
             return success
         except XiaomiSpeakerAuthError as e:
             self.log.error(f"小爱音箱登录失败: {e}")
@@ -247,8 +253,14 @@ class MiASTRBotPlugin(Star):
             result = await self.mihome_service.login()
             if isinstance(result, dict):
                 status = result.get("status")
-                if status in ("success", "started", "in_progress"):
-                    self.log.info(f"米家登录流程状态: {status}")
+                if status == "success":
+                    self.log.info("米家登录成功")
+                    return True
+                elif status == "started":
+                    self.log.info("米家登录流程已启动，请扫码完成登录")
+                    return True
+                elif status == "in_progress":
+                    self.log.info("米家登录进行中，请等待")
                     return True
                 self.log.error(f"米家登录失败: {result.get('message', '未知错误')}")
                 return False
@@ -324,13 +336,15 @@ class MiASTRBotPlugin(Star):
             return
         
         # 延迟初始化服务（带锁防止重复初始化）
-        if not self._running:
+        if not self._initialized:
             async with self._init_lock:
-                if not self._running:  # 双重检查锁定模式
-                    self._running = True
+                if not self._initialized:  # 双重检查锁定模式
                     try:
                         await self._init_services()
+                        self._initialized = True
+                        self._running = True
                     except Exception as e:
+                        self._initialized = False
                         self._running = False
                         self.log.error(f"延迟初始化失败: {e}")
                         return
