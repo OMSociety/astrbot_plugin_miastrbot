@@ -7,14 +7,27 @@
                 "description": "小米账号 UserId",
                 "type": "string",
                 "default": "",
-                "hint": "从 Cookie 中提取，以 0 开头"
+                "hint": "从 Cookie 中提取 userId（数字 ID），并非 cUserId。若配置了账号密码则自动获取，无需填"
+            },
+            "account": {
+                "description": "小米账号（手机号/邮箱/小米ID）",
+                "type": "string",
+                "default": "",
+                "hint": "配置账号密码后自动登录获取 token，无需手动填 user_id/service_token"
+            },
+            "password": {
+                "description": "小米账号密码",
+                "type": "string",
+                "default": "",
+                "obvious_hint": true,
+                "hint": "与 account 配合使用，自动登录获取有效 token"
             },
             "service_token": {
                 "description": "Service Token",
                 "type": "string",
                 "default": "",
                 "obvious_hint": true,
-                "hint": "从 Cookie 中提取，很长的一串字符"
+                "hint": "必须从 micommand.mina.mi.com 或 api.mina.mi.com 域名抓取，不能用 account.xiaomi.com 的 token"
             },
             "device_id": {
                 "description": "设备 DID",
@@ -29,10 +42,10 @@
                 "hint": "L05C(Play增强版) / LX06(Pro) / LX04 / X10A / L05B / L07A"
             },
             "ai_mode": {
-                "description": "AI 对话模式",
+                "description": "启用小爱语音 Agent",
                 "type": "bool",
-                "default": false,
-                "hint": "开启后私聊消息直接进 AI 意图识别"
+                "default": true,
+                "hint": "控制小爱音箱语音是否转交给 Agent 处理。"
             },
             "wake_words": {
                 "description": "唤醒词",
@@ -40,17 +53,39 @@
                 "default": "",
                 "hint": "示例：小爱。说出唤醒词后进入 LLM 对话模式"
             },
-            "model": {
-                "description": "LLM 模型",
+            "provider_mode": {
+                "description": "语音对话模型提供商模式",
                 "type": "string",
-                "default": "gpt-4o-mini",
-                "hint": "用于意图识别和闲聊"
+                "default": "default",
+                "options": ["default", "select", "custom"],
+                "hint": "default=跟随 AstrBot 默认提供商；select=从下方下拉选择已配置 provider；custom=手填 provider_id"
             },
-            "command_prefix": {
-                "description": "命令前缀",
+            "provider_id": {
+                "description": "语音对话模型提供商",
                 "type": "string",
-                "default": "/小爱",
-                "hint": "逗号分隔，带此前缀才当作命令处理"
+                "default": "",
+                "_special": "select_provider",
+                "hint": "当 provider_mode=select 时，从 AstrBot 已配置的聊天提供商中选择"
+            },
+            "persona_mode": {
+                "description": "语音人格模式",
+                "type": "string",
+                "default": "inherit",
+                "options": ["inherit", "select", "custom", "none"],
+                "hint": "inherit=继承 AstrBot 默认人格；select=从下方下拉选择已有人格；custom=使用下方 persona_prompt；none=不注入人格"
+            },
+            "persona_id": {
+                "description": "语音人格",
+                "type": "string",
+                "default": "",
+                "_special": "select_persona",
+                "hint": "当 persona_mode=select 时，从 AstrBot 已配置人格中选择"
+            },
+            "persona_prompt": {
+                "description": "小爱语音人格提示词",
+                "type": "string",
+                "default": "",
+                "hint": "仅用于小爱语音对话的人格设定，例如说话风格、身份、自称、禁忌等"
             }
         }
     },

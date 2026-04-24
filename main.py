@@ -191,15 +191,18 @@ class MiASTRBotPlugin(Star):
             self.log.error(f"Agent Handler 初始化失败: {e}")
         
         # 启动小爱音箱语音轮询
-        if self.speaker_service and self.speaker_service.is_logged_in:
+        if self.speaker_service and self.speaker_service.is_logged_in and self.config_manager.get("speaker.ai_mode", True):
             asyncio.create_task(self._run_speaker_polling())
 
     async def _run_speaker_polling(self):
         """运行小爱音箱语音轮询（支持等待模式）"""
-        self.log.info("启动小爱音箱语音轮询...")
+        self.log.info(f"启动小爱音箱语音轮询，唤醒词: {self.config_manager.get('speaker.wake_words', '')}")
         
         try:
-            async for command in self.speaker_service.poll_voice(keywords=["请", "帮我"]):
+            wake_words = [w.strip() for w in self.config_manager.get("speaker.wake_words", "").split(",") if w.strip()]
+            poll_keywords = wake_words or ["请", "帮我"]
+            self.log.info(f"小爱语音触发词: {poll_keywords}")
+            async for command in self.speaker_service.poll_voice(keywords=poll_keywords):
                 query = command.get("query", "")
                 self.log.info(f"收到语音命令: {query}")
                 
@@ -326,6 +329,35 @@ class MiASTRBotPlugin(Star):
         except Exception as e:
             return f"❌ 播报失败: {e}"
     
+    @filter.command("小爱", alias={"help"})
+    async def xiaoai_command(self, event: AstrMessageEvent):
+        """
+小爱音箱控制中心。
+
+用法：
+/小爱 帮助    - 查看所有命令
+/小爱 状态    - 查看服务连接状态
+/小爱 登录    - 重新登录小爱音箱和米家
+/小爱 设备    - 列出已绑定的米家设备
+/小爱 控制 <设备> <动作> - 控制设备，如 /小爱 控制 客厅灯 开
+/小爱 播报 <内容>     - 让小爱音箱播报文字
+        """
+        if not event.message_str:
+            return
+
+        message_text = event.message_str.strip()
+        command = message_text
+        if command.startswith("/小爱"):
+            command = command[len("/小爱"):].strip()
+        elif command.startswith("小爱"):
+            command = command[len("小爱"):].strip()
+
+        if not command:
+            await self._send_help(event, "")
+            return
+
+        await self._handle_command(event, command)
+
     @filter.event_message_type(filter.EventMessageType.PRIVATE_MESSAGE)
     async def on_message(self, event: AstrMessageEvent):
         """
@@ -350,29 +382,7 @@ class MiASTRBotPlugin(Star):
                         return
         
         message_text = event.message_str.strip()
-        
-        # 检查是否为命令
-        command_prefixes = [p.strip() for p in self.config_manager.get("speaker.command_prefix", "/小爱").split(",") if p.strip()] or ["/小爱"]
-        
-        for prefix in command_prefixes:
-            if message_text.startswith(prefix.strip()):
-                command = message_text[len(prefix):].strip()
-                # 忽略空命令（只有前缀无内容）
-                if not command:
-                    return
-                await self._handle_command(event, command)
-                return
-        
-        # 如果启用了 AI 模式，将消息发送给 Agent 处理
-        if self.config_manager.get("speaker.ai_mode", False) and self.agent_handler:
-            try:
-                response = await self.agent_handler.process(message_text)
-                if response:
-                    tts_text = response.get("tts_text", "")
-                    if tts_text:
-                        await event.send(MessageChain([Plain(tts_text)]))
-            except Exception as e:
-                self.log.error(f"Agent 处理失败: {e}")
+        return
     
     async def _handle_command(self, event: AstrMessageEvent, command: str):
         """处理命令"""
@@ -408,16 +418,18 @@ class MiASTRBotPlugin(Star):
     async def _send_help(self, event: AstrMessageEvent, _args: str):
         """发送帮助信息"""
         help_text = """
-小爱Astrbot 命令帮助：
+小爱 Astrbot 命令列表：
 
-「帮助」/「help」 - 显示此帮助信息
-「状态」/「status」 - 查看服务连接状态
-「登录」/「login」 - 重新登录服务
-「设备」/「devices」 - 列出米家设备
-「控制 <设备别名> <动作>」 - 控制设备
-「播报 <内容>」 - 通过小爱音箱播报
+/小爱 帮助      查看本帮助
+/小爱 状态      查看小爱音箱、米家、TTS、Agent 的连接状态
+/小爱 登录      重新登录小爱音箱和米家
+/小爱 设备      列出已绑定的米家设备
+/小爱 控制 <设备> <动作>  控制设备，例：/小爱 控制 客厅灯 开
+/小爱 播报 <内容>         让小爱音箱播报文字
 
-直接发送消息与小爱对话，或对小爱音箱说"请xxx"触发语音命令
+说明：
+- 小爱语音对话由 speaker.ai_mode + speaker.wake_words 控制
+- 对小爱说出唤醒词（如"芙兰"）后，才会尝试转给 AstrBot
         """.strip()
         await event.send(MessageChain([Plain(help_text)]))
     
@@ -427,19 +439,34 @@ class MiASTRBotPlugin(Star):
         if self.speaker_service:
             is_logged_in = getattr(self.speaker_service, "is_logged_in", False)
             speaker_logged_in = is_logged_in() if callable(is_logged_in) else bool(is_logged_in)
-        speaker_status = "✅ 已连接" if speaker_logged_in else "❌ 未连接"
-        mihome_status = "✅ 已连接" if self.mihome_service and self.mihome_service.is_authenticated() else "❌ 未连接"
-        tts_status = "✅ 就绪" if self.tts_server else "❌ 未就绪"
-        agent_status = "✅ 就绪" if self.agent_handler else "❌ 未就绪"
-        
-        status_text = f"""
-服务状态:
-├─ 小爱音箱: {speaker_status}
-├─ 米家: {mihome_status}
-├─ TTS: {tts_status}
-└─ Agent: {agent_status}
-        """.strip()
-        
+        mihome_ok = self.mihome_service and self.mihome_service.is_authenticated()
+
+        status_lines = [
+            "小爱 Astrbot 服务状态：",
+            f"  小爱音箱  {'✅ 已登录' if speaker_logged_in else '❌ 未登录'}",
+            f"  米家      {'✅ 已授权' if mihome_ok else '❌ 未授权'}",
+            f"  TTS      {'✅ 就绪' if self.tts_server else '❌ 未就绪'}",
+            f"  Agent    {'✅ 就绪' if self.agent_handler else '❌ 未就绪'}",
+            f"  AI模式   {'✅ 启用' if self.config_manager.get('speaker.ai_mode', True) else '❌ 停用'}",
+        ]
+        if self.speaker_service:
+            hw = getattr(self.speaker_service, 'hardware', '?')
+            did = getattr(self.speaker_service, 'device_id', '')
+            status_lines.append(f"  型号: {hw}  设备ID: {did or '自动选择'}")
+
+            dbg = self.speaker_service.get_debug_status() if hasattr(self.speaker_service, 'get_debug_status') else None
+            if dbg:
+                status_lines.append(f"  最近轮询: {dbg.get('last_poll_status') if dbg.get('last_poll_status') is not None else '无请求'}")
+                if dbg.get('last_poll_error'):
+                    status_lines.append(f"  最近错误: {dbg.get('last_poll_error')}")
+                if dbg.get('last_query'):
+                    status_lines.append(f"  最近命令: {dbg.get('last_query')}")
+                if dbg.get('auth_invalid_count'):
+                    status_lines.append(f"  401计数: {dbg.get('auth_invalid_count')}")
+                if dbg.get('last_poll_url'):
+                    status_lines.append(f"  最后URL: {dbg.get('last_poll_url')}")
+
+        status_text = "\n".join(status_lines)
         await event.send(MessageChain([Plain(status_text)]))
     
     async def _handle_login(self, event: AstrMessageEvent, _args: str):

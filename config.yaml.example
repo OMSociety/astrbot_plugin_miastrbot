@@ -2,21 +2,20 @@
 # 复制此文件为 config.yaml 并填写配置
 
 # ========== 小爱音箱 ==========
-xiaomi:
-  account: ""                 # 小米账号（邮箱或手机号）
-  password: ""               # 密码
+speaker:
+  user_id: ""                 # 从 account.xiaomi.com Cookie 中提取 userId
+  service_token: ""          # 从 Cookie 中提取 serviceToken（micoapi）
   device_id: ""              # 留空则自动选择第一个设备
   hardware: "L05C"            # L05C/LX06/LX04/X10A/L05B
-
-# ========== 米家设备 ==========
-mihome:
-  # 米家授权请在 WebUI 中扫码完成，无需在 AstrBot 前端填写账号密码
-
-# ========== 对话模式 ==========
-speaker:
-  ai_mode: false             # false：仅命令前缀响应 | true：私聊消息全进AI
-  model: "gpt-4o-mini"       # LLM 模型
-  command_prefix: "/小爱,"     # 命令前缀，逗号分隔
+  ai_mode: true               # true：启用小爱语音 Agent 处理；false：仅轮询不交给 AI
+  provider_mode: "default"   # default=跟随 AstrBot 默认提供商；select/custom=使用 provider_id
+  provider_id: ""            # 可选，填写 AstrBot 里已配置的聊天提供商 ID
+  persona_mode: "inherit"    # inherit=继承 AstrBot 默认人格；select=选择已有 persona_id；custom=使用下方 persona_prompt；none=不注入人格
+  persona_id: ""             # 可选，填写 AstrBot 里已存在的人格 ID
+  persona_prompt: |
+    你是芙兰，住在红魔馆的少女。
+    当用户用“芙兰”唤醒你时，你要像熟悉的私人语音助手一样回答。
+    回答要简短、自然、适合语音播报，不要太书面，不要输出 Markdown。
 
 # ========== 天气查询 ==========
 weather:

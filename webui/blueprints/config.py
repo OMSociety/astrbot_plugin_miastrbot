@@ -85,6 +85,51 @@ async def get_supported_models():
     ]
     return {"success": True, "data": models}
 
+@router.get("/config/personas")
+async def get_persona_list():
+    """获取 AstrBot 中所有人格列表"""
+    try:
+        from astrbot.core.core_lifecycle import AstrBotCoreLifecycle
+        from fastapi import Request
+        from ..dependencies import _get_core_lifecycle
+        core = _get_core_lifecycle()
+        if not core or not core.persona_mgr:
+            return {"success": False, "message": "人格管理器未初始化", "data": []}
+        personas = await core.persona_mgr.get_all_personas()
+        result = []
+        for p in personas:
+            if isinstance(p, dict):
+                result.append({"id": p.get("id", ""), "name": p.get("name", "未命名"), "prompt": p.get("prompt", "")[:100]})
+            else:
+                pid = getattr(p, "id", "") or getattr(p, "persona_id", "")
+                pname = getattr(p, "name", "未命名")
+                result.append({"id": pid, "name": pname, "prompt": ""})
+        return {"success": True, "data": result}
+    except Exception as e:
+        from astrbot.api import logger
+        logger.error(f"[miastrbot] 获取人格列表失败: {e}")
+        return {"success": False, "message": str(e), "data": []}
+
+@router.get("/config/providers")
+async def get_provider_list():
+    """获取 AstrBot 中已配置的聊天提供商列表"""
+    try:
+        from ..dependencies import _get_core_lifecycle
+        core = _get_core_lifecycle()
+        if not core or not core.provider_manager:
+            return {"success": False, "message": "提供商管理器未初始化", "data": []}
+        from astrbot.core.provider.entities import ProviderType
+        providers = core.provider_manager.get_insts(ProviderType.CHAT_COMPLETION)
+        result = []
+        for p in providers:
+            meta = p.meta()
+            result.append({"id": meta.id, "name": meta.name or meta.id, "model": getattr(meta, "model", "")})
+        return {"success": True, "data": result}
+    except Exception as e:
+        from astrbot.api import logger
+        logger.error(f"[miastrbot] 获取提供商列表失败: {e}")
+        return {"success": False, "message": str(e), "data": []}
+
 @router.get("/config/supported-tts")
 async def get_supported_tts():
     """获取支持的 TTS 引擎列表"""

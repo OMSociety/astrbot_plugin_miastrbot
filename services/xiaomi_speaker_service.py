@@ -19,15 +19,22 @@ import json
 import logging
 import os
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 
 from astrbot.api import logger
 
+try:
+    from miservice import MiAccount, MiNAService
+    MISERVICE_AVAILABLE = True
+except ImportError:
+    MISERVICE_AVAILABLE = False
+
 # API 端点
 MINA_API_HOST = "api2.mina.mi.com"
-LATEST_ASK_API = "https://userprofile.mina.mi.com/device_profile/v2/conversation?source=dialogu&hardware={hardware}&timestamp={timestamp}&limit=2"
+LATEST_ASK_API = "https://userprofile.mina.mi.com/device_profile/v2/conversation?limit=2&timestamp={timestamp}&requestId={requestId}&source=dialogu&hardware={hardware}"
 
 # 硬件型号对应的命令
 HARDWARE_COMMAND_DICT = {
@@ -88,6 +95,8 @@ class XiaomiSpeakerService:
         # Cookie 配置（从 account.xiaomi.com F12 获取）
         self.user_id = config.get("user_id", "")
         self.service_token = config.get("service_token", "")
+        self.account = config.get("account", "")
+        self.password = config.get("password", "")
         
         # Token 文件路径
         self.token_path = os.path.join(self.data_dir, "speaker_token.json")
@@ -98,7 +107,12 @@ class XiaomiSpeakerService:
         # 轮询状态
         self._last_timestamp = 0
         self._running = False
-        
+        self._last_poll_status = None
+        self._last_poll_error = None
+        self._last_query = ""
+        self._last_poll_url = None
+        self._auth_invalid_count = 0
+
         # AI 回调（用于处理语音命令）
         self.ai_handler = None
         
@@ -120,20 +134,26 @@ class XiaomiSpeakerService:
     def _get_headers(self) -> Dict[str, str]:
         """获取请求头"""
         return {
-            "User-Agent": "MiHome/6.0.103 (com.xiaomi.mihome; build:6.0.103.1; iOS 14.4.0) Alamofire/6.0.103 MICO/iOSApp/appStore/6.0.103",
-            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; 000; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/119.0.6045.193 Mobile Safari/537.36 /XiaoMi/HybridView/ micoSoundboxApp/i appVersion/A_2.4.40",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
         }
     
     def _get_cookies(self) -> Dict[str, str]:
         """获取 Cookie"""
-        return {
+        cookies = {
             "userId": self.user_id,
             "serviceToken": self.service_token,
         }
+        if self.device_id:
+            cookies["deviceId"] = self.device_id
+        return cookies
     
     async def login(self) -> bool:
         """
-        验证 Cookie 是否有效
+        验证 Cookie 是否有效，或通过账号密码登录获取 token
         
         Returns:
             是否登录成功
@@ -141,12 +161,50 @@ class XiaomiSpeakerService:
         Raises:
             XiaomiSpeakerAuthError: 认证失败
         """
+        if self.account and self.password and MISERVICE_AVAILABLE:
+            # 方式一：账号密码登录（自动获取有效 token）
+            logger.info("[miastrbot] 使用账号密码登录小爱音箱...")
+            try:
+                session_for_login = aiohttp.ClientSession()
+                mi_account = MiAccount(
+                    session_for_login,
+                    self.account,
+                    self.password,
+                    self.token_path,
+                )
+                await mi_account.login("micoapi")
+                self.mi_account = mi_account
+                self.mi_naservice = MiNAService(mi_account)
+                
+                # 从 token 文件读取 userId 和 serviceToken
+                if os.path.exists(self.token_path):
+                    with open(self.token_path) as f:
+                        user_data = json.load(f)
+                    self.user_id = user_data.get("userId", "")
+                    micoapi_token = user_data.get("micoapi", [])
+                    if isinstance(micoapi_token, list) and len(micoapi_token) >= 2:
+                        self.service_token = micoapi_token[1]
+                
+                await session_for_login.close()
+                
+                if self.user_id and self.service_token:
+                    logger.info(f"[miastrbot] 账号密码登录成功，userId: {self.user_id}")
+                    self._auth_invalid_count = 0
+                    self._save_token()
+                    return True
+                else:
+                    raise XiaomiSpeakerAuthError("账号密码登录成功但无法解析 token")
+                    
+            except Exception as e:
+                logger.error(f"[miastrbot] 账号密码登录失败: {e}")
+                raise XiaomiSpeakerAuthError(f"账号密码登录失败: {e}")
+        
         if not (self.user_id and self.service_token):
             raise XiaomiSpeakerAuthError(
-                "未配置 user_id 和 service_token，请从 Cookie 中提取这两个值"
+                "未配置 user_id 和 service_token，请从 Cookie 中提取这两个值，或配置账号密码自动登录"
             )
         
-        # 测试 API 调用
+        # 方式二：手动 Cookie 登录（直接测试 API）
         session = await self._get_session()
         try:
             url = f"https://{MINA_API_HOST}/admin/v2/device_list"
@@ -157,12 +215,13 @@ class XiaomiSpeakerService:
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 if resp.status == 401:
+                    detail = await resp.text()
                     raise XiaomiSpeakerAuthError(
-                        "Cookie 已过期，请重新获取"
+                        f"Cookie 已过期或无权限，请重新获取: {detail[:120]}"
                     )
                 elif resp.status != 200:
                     text = await resp.text()
-                    raise XiaomiSpeakerAuthError(f"API 请求失败: {resp.status}")
+                    raise XiaomiSpeakerAuthError(f"API 请求失败: {resp.status}, 响应: {text[:120]}")
                 
                 data = await resp.json()
                 devices = data.get("data", [])
@@ -170,6 +229,7 @@ class XiaomiSpeakerService:
                 # 保存 token
                 self._save_token()
                 
+                self._auth_invalid_count = 0
                 logger.info(f"[miastrbot] 小爱音箱登录成功，获取到 {len(devices)} 个设备")
                 return True
                 
@@ -244,6 +304,24 @@ class XiaomiSpeakerService:
             
             raise XiaomiSpeakerError("未找到可用的小爱音箱设备")
     
+    def get_debug_status(self) -> Dict[str, Any]:
+        """获取最近一次轮询的调试状态"""
+        return {
+            "last_poll_status": self._last_poll_status,
+            "last_poll_error": self._last_poll_error,
+            "last_query": self._last_query,
+            "last_poll_url": self._last_poll_url,
+            "auth_invalid_count": self._auth_invalid_count,
+        }
+
+    async def _build_conversation_urls(self, timestamp: str, request_id: str) -> list[str]:
+        """构造对话接口候选 URL（兼容不同服务端参数差异）"""
+        return [
+            LATEST_ASK_API.format(hardware=self.hardware, timestamp=timestamp, requestId=request_id),
+            f"https://userprofile.mina.mi.com/device_profile/v2/conversation?source=dialogue&hardware={self.hardware}&timestamp={timestamp}&limit=2",
+            f"https://userprofile.mina.mi.com/device_profile/v2/conversation?source=dialogu&hardware={self.hardware}&timestamp={timestamp}&requestId={request_id}&limit=2",
+        ]
+
     async def get_latest_command(self) -> Optional[Dict[str, Any]]:
         """
         获取最新的语音命令
@@ -252,45 +330,81 @@ class XiaomiSpeakerService:
             语音命令字典，包含 query（命令文本）等字段。如果没有新命令返回 None。
         """
         session = await self._get_session()
+        if not self.device_id:
+            try:
+                await self.get_device_id()
+            except Exception:
+                logger.debug("[miastrbot] 获取设备ID失败，继续尝试请求对话记录")
+
         timestamp = str(int(time.time() * 1000))
-        
-        url = LATEST_ASK_API.format(hardware=self.hardware, timestamp=timestamp)
-        
-        try:
-            async with session.get(
-                url,
-                cookies=self._get_cookies(),
-                headers=self._get_headers(),
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status != 200:
-                    return None
-                
-                data = await resp.json()
-                records = data.get("data", {}).get("records", [])
-                
-                if not records:
-                    return None
-                
-                record = records[0]
-                record_time = record.get("time", 0)
-                
-                # 检查是否是新记录
-                if record_time > self._last_timestamp:
-                    self._last_timestamp = record_time
-                    return {
-                        "query": record.get("query", ""),
-                        "time": record_time,
-                        "request_id": record.get("requestId", ""),
-                        "answers": record.get("answers", []),
-                    }
-                
-                return None
-                
-        except Exception as e:
-            logger.debug(f"[miastrbot] 获取语音命令失败: {e}")
-            return None
-    
+        request_id = uuid.uuid4().hex[:12]
+        urls = await self._build_conversation_urls(timestamp=timestamp, request_id=request_id)
+
+        for url in urls:
+            self._last_poll_url = url
+            try:
+                async with session.get(
+                    url,
+                    cookies=self._get_cookies(),
+                    headers=self._get_headers(),
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    self._last_poll_status = resp.status
+                    if resp.status == 200:
+                        data = await resp.json()
+                        records = data.get("data", {}).get("records", [])
+
+                        if not records:
+                            logger.debug("[miastrbot] 对话记录为空")
+                            return None
+
+                        record = records[0]
+                        record_time = record.get("time", 0)
+
+                        # 检查是否是新记录
+                        if record_time > self._last_timestamp:
+                            self._last_timestamp = record_time
+                            self._last_query = record.get("query", "")
+                            self._last_poll_error = None
+                            return {
+                                "query": record.get("query", ""),
+                                "time": record_time,
+                                "request_id": record.get("requestId", ""),
+                                "answers": record.get("answers", []),
+                            }
+
+                        self._last_poll_error = None
+                        return None
+
+                    body = None
+                    try:
+                        body = (await resp.text())[:200]
+                    except Exception:
+                        body = None
+
+                    if resp.status == 401:
+                        self._auth_invalid_count += 1
+                        self._last_poll_error = f"HTTP 401 未授权: {body}"
+                        logger.warning(
+                            "[miastrbot] 获取对话记录返回401（Cookie/Token 无效或过期），请重新执行 /小爱 登录 并更新 Cookie，响应: %s",
+                            body,
+                        )
+                    elif resp.status == 400:
+                        self._last_poll_error = f"HTTP 400 参数错误: {body}"
+                        logger.warning(
+                            "[miastrbot] 获取对话记录返回400，请检查URL参数（source/headers/设备ID），响应: %s",
+                            body,
+                        )
+                    else:
+                        self._last_poll_error = f"HTTP {resp.status}: {body}"
+                        logger.warning(f"[miastrbot] 获取对话记录失败 HTTP {resp.status}, 响应: {body}")
+            except Exception as e:
+                self._last_poll_error = str(e)
+                logger.debug(f"[miastrbot] 获取语音命令失败: {e}")
+
+        return None
+
+
     async def speak(self, text: str) -> bool:
         """
         TTS 播报文字
@@ -394,7 +508,7 @@ class XiaomiSpeakerService:
         轮询语音命令（异步生成器）
         
         Args:
-            keywords: 触发关键词列表，如 ["请", "帮我"]
+            keywords: 触发关键词列表，如 ["小爱同学", "小爱"]
             poll_interval: 轮询间隔（秒）
         
         Yields:
@@ -402,6 +516,7 @@ class XiaomiSpeakerService:
         """
         if keywords is None:
             keywords = ["请", "帮我"]
+        keywords = [kw.strip() for kw in keywords if kw and kw.strip()]
         
         self._running = True
         logger.info(f"[miastrbot] 开始轮询语音命令，关键词: {keywords}")
@@ -411,17 +526,22 @@ class XiaomiSpeakerService:
                 command = await self.get_latest_command()
                 
                 if command:
-                    query = command.get("query", "")
+                    query = (command.get("query", "") or "").strip()
+                    logger.info(f"[miastrbot] 轮询收到命令: {query!r}  关键词: {keywords}")
                     
-                    # 检查是否包含触发关键词
-                    if any(kw in query for kw in keywords):
-                        # 去除关键词
-                        for kw in keywords:
-                            if query.startswith(kw):
-                                query = query[len(kw):].strip()
-                                break
+                    # 没配置关键词时，默认放行全部语音
+                    matched = not keywords
+                    if not matched:
+                        matched = any(query.startswith(kw) or kw in query for kw in keywords)
+                    
+                    if matched:
                         command["query"] = query
+                        logger.info(f"[miastrbot] 命令命中关键词，进入 Agent 处理")
                         yield command
+                    else:
+                        logger.debug(f"[miastrbot] 命令未命中关键词，跳过")
+                else:
+                    logger.debug("[miastrbot] 本次轮询无新命令")
                 
                 await asyncio.sleep(poll_interval)
                 

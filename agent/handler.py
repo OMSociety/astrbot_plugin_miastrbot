@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from astrbot.api import logger
+from astrbot.core.provider.entities import ProviderType
 
 from .prompts import (
     SYSTEM_PROMPT,
@@ -100,10 +101,55 @@ class AgentHandler:
         self._wake_session: Optional[WakeWordSession] = None
         
         # 天气配置
+        self.voice_provider_mode = self.config.get("provider_mode", "default").strip() or "default"
+        self.voice_provider_id = self.config.get("provider_id", "").strip()
+        self.voice_persona_mode = self.config.get("persona_mode", "inherit").strip() or "inherit"
+        self.voice_persona_id = self.config.get("persona_id", "").strip()
+        self.voice_persona_prompt = self.config.get("persona_prompt", "").strip()
         self.weather_api_key = self.config.get("weather_api_key", "")
         self.weather_city = self.config.get("weather_city", "北京")
-        
-        logger.info(f"[miastrbot] Agent处理器初始化，唤醒词: {self.wake_words or '未配置'}，LLM模型: {self.model}")
+
+        logger.info(f"[miastrbot] Agent处理器初始化，唤醒词: {self.wake_words or '未配置'}，provider_mode={self.voice_provider_mode}，persona_mode={self.voice_persona_mode}")
+
+    def _get_provider_id(self) -> Optional[str]:
+        """获取语音对话使用的 Provider ID"""
+        mode = self.voice_provider_mode.lower()
+        if mode == "default":
+            if not self.context:
+                return None
+            try:
+                provider = self.context.provider_manager.get_using_provider(ProviderType.CHAT_COMPLETION)
+                if provider:
+                    return provider.meta().id
+            except Exception as e:
+                logger.warning(f"[miastrbot] 获取默认 Provider 失败: {e}")
+        elif mode in ("select", "custom"):
+            return self.voice_provider_id or None
+        return None
+
+    def _get_persona_prompt(self) -> str:
+        """获取语音对话使用的人格提示词"""
+        mode = self.voice_persona_mode.lower()
+        if mode == "none":
+            return ""
+        if mode == "custom":
+            return self.voice_persona_prompt
+        if mode in ("inherit", "select"):
+            if self.context:
+                try:
+                    if mode == "select" and self.voice_persona_id:
+                        persona = self.context.persona_manager.get_persona_v3_by_id(self.voice_persona_id)
+                    else:
+                        persona = self.context.persona_manager.get_default_persona_v3()
+                    if isinstance(persona, dict):
+                        prompt = persona.get("prompt", "")
+                    else:
+                        prompt = getattr(persona, "prompt", "") if hasattr(persona, "prompt") else ""
+                    if prompt:
+                        return prompt
+                except Exception as e:
+                    logger.warning(f"[miastrbot] 获取人格失败: {e}")
+        return self.voice_persona_prompt
 
     def _check_wake_word(self, text: str) -> tuple:
         """
@@ -272,14 +318,30 @@ class AgentHandler:
         if not self.context:
             return self._get_simple_chat_response(user_input)
         
-        prompt = f"""你是一个智能助手，用户通过语音与你对话。请用简洁，自然的语言回答。
+        persona_prompt = self._get_persona_prompt() or SYSTEM_PROMPT
+        prompt = f"""{persona_prompt}
+
+你正在通过小爱音箱和用户进行中文语音对话。
+回答要求：
+1. 口语化，像真人说话
+2. 简短，尽量控制在50字内
+3. 适合直接语音播报
+4. 不要使用 Markdown、项目符号、标题
+5. 如果用户是用唤醒词触发的，可以自然带一点人格语气
 
 用户说：{user_input}
 
-请直接回答，不需要加"用户说"之类的前缀。"""
+请直接回答，不要解释你的设定，不要加多余前缀。"""
         
         try:
-            resp = await self.context.llm_generate(prompt=prompt)
+            provider_id = self._get_provider_id()
+            if provider_id:
+                resp = await self.context.llm_generate(
+                    chat_provider_id=provider_id,
+                    prompt=prompt,
+                )
+            else:
+                resp = await self.context.llm_generate(prompt=prompt)
             text = resp.completion_text or resp.text or ""
             return text.strip()
         except Exception as e:
@@ -353,7 +415,13 @@ class AgentHandler:
         )
         
         try:
-            resp = await self.context.llm_generate(prompt=prompt)
+            provider_id = self._get_provider_id()
+            if provider_id:
+                resp = await self.context.llm_generate(
+                    chat_provider_id=provider_id, prompt=prompt,
+                )
+            else:
+                resp = await self.context.llm_generate(prompt=prompt)
             intent_text = (resp.completion_text or resp.text or "").strip().lower()
             
             intent_map = {
